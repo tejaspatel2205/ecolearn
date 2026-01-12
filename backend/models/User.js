@@ -1,0 +1,67 @@
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  password: {
+    type: String,
+    required: true,
+    select: false
+  },
+  full_name: {
+    type: String,
+    required: true
+  },
+  mobile: {
+    type: String,
+    required: true
+  },
+  role: {
+    type: String,
+    enum: ['student', 'teacher', 'admin'],
+    required: true
+  },
+  institution_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Institution',
+    default: null
+  },
+  email_verified: {
+    type: Boolean,
+    default: false
+  },
+  created_at: {
+    type: Date,
+    default: Date.now
+  },
+  updated_at: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) {
+    this.updated_at = Date.now();
+    return;
+  }
+
+  this.password = await bcrypt.hash(this.password, 10);
+  this.updated_at = Date.now();
+});
+
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+userSchema.set('toJSON', {
+  virtuals: true
+});
+
+module.exports = mongoose.model('User', userSchema);
