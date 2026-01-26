@@ -25,7 +25,9 @@ export default function QuizzesPage() {
     try {
       const quizzesData = await getQuizzes();
       if (quizzesData) {
-        setQuizzes(quizzesData);
+        // Filter out Smart Practice quizzes
+        const generalQuizzes = quizzesData.filter((q: Quiz) => !q.title.startsWith('Smart Practice'));
+        setQuizzes(generalQuizzes);
       }
     } catch (error) {
       console.error('Error loading quizzes:', error);

@@ -35,6 +35,8 @@ app.use('/api/student', require('./routes/student'));
 app.use('/api/teacher', require('./routes/teacher'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/exam-planner', require('./routes/examPlanner'));
+app.use('/api/badges', require('./routes/badges'));
 
 // Health check
 app.get('/health', (req, res) => {

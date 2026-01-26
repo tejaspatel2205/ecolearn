@@ -32,6 +32,23 @@ const quizQuestionSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  subject: {
+    type: String,
+    trim: true
+  },
+  focus_area: {
+    type: String,
+    trim: true
+  },
+  difficulty: {
+    type: String,
+    enum: ['easy', 'medium', 'hard'],
+    default: 'medium'
+  },
+  explanation: {
+    type: String,
+    trim: true
+  },
   created_at: {
     type: Date,
     default: Date.now

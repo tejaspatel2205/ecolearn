@@ -24,7 +24,9 @@ export default function ManageQuizPage() {
 
     const loadQuiz = async () => {
         try {
-            const data = await getQuiz(params.id);
+            const pid = Array.isArray(params?.id) ? params?.id[0] : params?.id;
+            if (!pid) return;
+            const data = await getQuiz(pid);
             setQuiz(data);
         } catch (error) {
             console.error('Error loading quiz:', error);

@@ -26,9 +26,12 @@ export default function QuizAnalyticsPage() {
     const loadData = async () => {
         if (!user || (user.role !== 'teacher' && user.role !== 'admin')) return;
         try {
+            const pid = Array.isArray(params?.id) ? params?.id[0] : params?.id;
+            if (!pid) return;
+
             const [quizData, attemptsData] = await Promise.all([
-                getQuiz(params.id),
-                getQuizAttempts(params.id)
+                getQuiz(pid),
+                getQuizAttempts(pid)
             ]);
             setQuiz(quizData);
             setAttempts(attemptsData);

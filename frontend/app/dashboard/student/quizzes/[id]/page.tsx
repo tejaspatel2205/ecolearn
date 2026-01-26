@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,6 +11,8 @@ import { getQuiz, submitQuiz } from '@/lib/api';
 export default function TakeQuizPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isPractice = searchParams.get('practice') === 'true';
   const { user } = useAuth();
   const [quiz, setQuiz] = useState<any>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -63,7 +65,12 @@ export default function TakeQuizPage() {
         }
 
         if (quizData.questions) {
-          setQuestions(quizData.questions);
+          let loadedQuestions = quizData.questions;
+          if (isPractice) {
+            // Shuffle questions
+            loadedQuestions = [...loadedQuestions].sort(() => Math.random() - 0.5);
+          }
+          setQuestions(loadedQuestions);
         }
       }
     } catch (error) {

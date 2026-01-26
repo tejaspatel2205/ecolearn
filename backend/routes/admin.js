@@ -5,6 +5,8 @@ const Lesson = require('../models/Lesson');
 const Quiz = require('../models/Quiz');
 const Challenge = require('../models/Challenge');
 const StudentStats = require('../models/StudentStats');
+const InternalAssessment = require('../models/InternalAssessment');
+const RetakeRequest = require('../models/RetakeRequest');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -35,6 +37,48 @@ router.get('/stats', authMiddleware, roleMiddleware('admin'), async (req, res) =
   }
 });
 
+
+// Get Exam Planner Stats
+router.get('/exam-planner-stats', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    // 1. Completion Rate: % of students who have at least one internal assessment
+    const totalStudents = await User.countDocuments({ role: 'student' });
+    const studentsWithAssessments = await InternalAssessment.distinct('student_id');
+    const completionRate = totalStudents > 0
+      ? Math.round((studentsWithAssessments.length / totalStudents) * 100)
+      : 0;
+
+    // 2. Average Internal Score (Global)
+    const allAssessments = await InternalAssessment.find();
+    let totalPercentage = 0;
+    let count = 0;
+
+    allAssessments.forEach(ass => {
+      if (ass.total_internal_marks > 0) {
+        totalPercentage += (ass.internal_marks_obtained / ass.total_internal_marks) * 100;
+        count++;
+      }
+    });
+
+    const avgInternalScore = count > 0 ? (totalPercentage / count).toFixed(1) : 0;
+
+    // 3. Pending Reviews (Retake requests)
+    const pendingAssessments = await RetakeRequest.countDocuments({ status: 'pending' });
+
+    // 4. Active Policies (Static for now, implies NEP 2020 compliance check)
+    const activePolicies = 4;
+
+    res.json({
+      completionRate: `${completionRate}%`,
+      avgInternalScore: `${avgInternalScore}%`,
+      pendingAssessments,
+      activePolicies
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all users
 router.get('/users', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
@@ -54,11 +98,11 @@ router.put('/users/:id', authMiddleware, roleMiddleware('admin'), async (req, re
       { role },
       { new: true }
     ).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -139,7 +183,7 @@ router.get('/analytics', authMiddleware, roleMiddleware('admin'), async (req, re
 router.get('/leaderboard', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
     const { period = 'all-time' } = req.query;
-    
+
     const studentStats = await StudentStats.find()
       .populate('student_id', 'full_name email institution_id')
       .sort({ total_points: -1 })
@@ -169,7 +213,7 @@ router.get('/leaderboard', authMiddleware, roleMiddleware('admin'), async (req, 
 router.post('/users/:id/reset-stats', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
     const userId = req.params.id;
-    
+
     // Reset student stats
     await StudentStats.findOneAndUpdate(
       { student_id: userId },
@@ -224,7 +268,7 @@ router.put('/content/:type/:id/status', authMiddleware, roleMiddleware('admin'),
   try {
     const { type, id } = req.params;
     const { status } = req.body;
-    
+
     let Model;
     switch (type) {
       case 'lessons':

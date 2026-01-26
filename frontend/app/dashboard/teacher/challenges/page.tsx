@@ -27,7 +27,9 @@ function TeacherChallengesContent() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Submission management state
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<'grading' | 'analytics'>('grading');
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
@@ -142,9 +144,42 @@ function TeacherChallengesContent() {
         (s.challenge_id === challenge.id) || (s.challenge_id === challenge._id)
       );
       setSubmissions(challengeSubmissions);
+      setViewMode('grading');
+      return challengeSubmissions;
     } catch (error) {
       console.error('Error loading submissions:', error);
       alert('Failed to load submissions');
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  };
+
+  const handleViewAnalytics = async (challenge: Challenge) => {
+    // For now, reuse the submissions view but we could add a mode flag
+    // The user wants "after grading, move to analytics". 
+    // Let's just open the modal which now shows graded status.
+    // In a full implementation, we would show charts here.
+    setSelectedChallenge(challenge);
+    setViewMode('analytics');
+
+    // We can reuse the same loading logic but set mode to analytics
+    // Note: handleViewSubmissions sets mode to grading, so we need to call the API directly or refactor
+    // Let's refactor slightly to avoid double state update, or just setting mode after call?
+    // Setting mode after call is safer if we just copy the fetch logic properly or extracted it.
+    // For simplicity, let's just copy the fetch logic here to ensure correct mode.
+
+    setSubmissionsLoading(true);
+    try {
+      const { getChallengeSubmissions } = await import('@/lib/api');
+      const allSubmissions = await getChallengeSubmissions();
+      const challengeSubmissions = allSubmissions.filter((s: any) =>
+        (s.challenge_id._id === challenge.id) || (s.challenge_id._id === challenge._id) ||
+        (s.challenge_id === challenge.id) || (s.challenge_id === challenge._id)
+      );
+      setSubmissions(challengeSubmissions);
+    } catch (error) {
+      console.error('Error loading submissions:', error);
+      alert('Failed to load data');
     } finally {
       setSubmissionsLoading(false);
     }
@@ -385,8 +420,8 @@ function TeacherChallengesContent() {
 
                 <div className="border-t pt-4">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-600">Submissions: 0</span>
-                    <span className="text-sm text-gray-600">Completion Rate: 0%</span>
+                    <span className="text-sm text-gray-600">Submissions: {(challenge as any).stats?.submissions || 0}</span>
+                    <span className="text-sm text-gray-600">Completion Rate: {(challenge as any).stats?.completionRate || 0}%</span>
                   </div>
 
                   <div className="flex gap-2">
@@ -396,7 +431,10 @@ function TeacherChallengesContent() {
                     >
                       View Submissions
                     </button>
-                    <button className="flex-1 bg-green-50 text-green-700 py-2 px-3 rounded text-sm hover:bg-green-100">
+                    <button
+                      onClick={() => handleViewAnalytics(challenge)}
+                      className="flex-1 bg-green-50 text-green-700 py-2 px-3 rounded text-sm hover:bg-green-100"
+                    >
                       Analytics
                     </button>
                   </div>
@@ -428,11 +466,11 @@ function TeacherChallengesContent() {
               <div className="p-6 border-b border-emerald-100 sticky top-0 bg-white/95 backdrop-blur z-10 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-emerald-100 rounded-lg">
-                    <Target className="w-6 h-6 text-emerald-600" />
+                    {viewMode === 'analytics' ? <Award className="w-6 h-6 text-emerald-600" /> : <Target className="w-6 h-6 text-emerald-600" />}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{selectedChallenge.title}</h2>
-                    <p className="text-sm text-emerald-600 font-medium">Student Submissions</p>
+                    <p className="text-sm text-emerald-600 font-medium">{viewMode === 'analytics' ? 'Challenge Analytics & History' : 'Pending Submissions for Grading'}</p>
                   </div>
                 </div>
                 <button
@@ -454,92 +492,109 @@ function TeacherChallengesContent() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {submissions.map((sub: any) => (
-                      <div key={sub._id} className="border border-emerald-100 rounded-xl p-5 bg-gradient-to-br from-white to-emerald-50/30 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{sub.student_id?.full_name || 'Unknown Student'}</h3>
-                            <p className="text-sm text-gray-500">{sub.student_id?.email}</p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              Submitted: {new Date(sub.submitted_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <div className={`px-2 py-1 rounded text-xs font-semibold inline-block mb-1 ${sub.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              sub.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
-                              {sub.status.toUpperCase()}
-                            </div>
-                            {sub.highest_points > 0 && <div className="text-xs text-green-600 font-bold">High Score: {sub.highest_points}</div>}
-                          </div>
-                        </div>
-
-                        <div className="bg-white p-3 rounded border mb-4 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
-                          {sub.submission_text}
-                        </div>
-
-                        {/* Grading Controls */}
-                        {sub.status === 'pending' && (
-                          <div className="border-t pt-4 mt-4">
-                            <h4 className="text-sm font-semibold mb-2">Grade Submission</h4>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => handleGrade(sub._id, 'approved', selectedChallenge.points_reward)}
-                                className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition"
-                              >
-                                Approve ({selectedChallenge.points_reward} pts)
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const points = prompt('Enter points to award:', selectedChallenge.points_reward.toString());
-                                  if (points !== null) {
-                                    const parsedPoints = parseInt(points);
-                                    if (!isNaN(parsedPoints)) {
-                                      handleGrade(sub._id, 'approved', parsedPoints);
-                                    } else {
-                                      alert("Please enter a valid number");
-                                    }
-                                  }
-                                }}
-                                className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition"
-                              >
-                                Approve (Custom)
-                              </button>
-                              <button
-                                onClick={() => handleGrade(sub._id, 'rejected', 0)}
-                                className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition"
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Retake Request Controls */}
-                        {sub.retake_status === 'pending' && (
-                          <div className="border-t border-yellow-200 bg-yellow-50 p-3 mt-4 rounded">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-semibold text-yellow-800">⚠️ Retake Requested</span>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleRetake(sub._id, 'approved')}
-                                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
-                                >
-                                  Approve Retake
-                                </button>
-                                <button
-                                  onClick={() => handleRetake(sub._id, 'rejected')}
-                                  className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700"
-                                >
-                                  Reject Request
-                                </button>
+                    {submissions
+                      .filter(sub => {
+                        if (viewMode === 'analytics') return true;
+                        // In grading mode, only show pending status or retake pending
+                        return sub.status === 'pending' || sub.retake_status === 'pending';
+                      })
+                      .length === 0 && viewMode === 'grading' ? (
+                      <div className="text-center py-12 text-gray-500">
+                        No pending submissions to grade. Check Analytics for history.
+                      </div>
+                    ) : (
+                      submissions
+                        .filter(sub => {
+                          if (viewMode === 'analytics') return true;
+                          return sub.status === 'pending' || sub.retake_status === 'pending';
+                        })
+                        .map((sub: any) => (
+                          <div key={sub._id} className="border border-emerald-100 rounded-xl p-5 bg-gradient-to-br from-white to-emerald-50/30 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-4">
+                              <div>
+                                <h3 className="font-semibold text-gray-900">{sub.student_id?.full_name || 'Unknown Student'}</h3>
+                                <p className="text-sm text-gray-500">{sub.student_id?.email}</p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Submitted: {new Date(sub.submitted_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <div className={`px-2 py-1 rounded text-xs font-semibold inline-block mb-1 ${sub.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                  sub.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                  {sub.status.toUpperCase()}
+                                </div>
+                                {sub.highest_points > 0 && <div className="text-xs text-green-600 font-bold">High Score: {sub.highest_points}</div>}
                               </div>
                             </div>
+
+                            <div className="bg-white p-3 rounded border mb-4 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
+                              {sub.submission_text}
+                            </div>
+
+                            {/* Grading Controls */}
+                            {sub.status === 'pending' && (
+                              <div className="border-t pt-4 mt-4">
+                                <h4 className="text-sm font-semibold mb-2">Grade Submission</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => handleGrade(sub._id, 'approved', selectedChallenge.points_reward)}
+                                    className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition"
+                                  >
+                                    Approve ({selectedChallenge.points_reward} pts)
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const points = prompt('Enter points to award:', selectedChallenge.points_reward.toString());
+                                      if (points !== null) {
+                                        const parsedPoints = parseInt(points);
+                                        if (!isNaN(parsedPoints)) {
+                                          handleGrade(sub._id, 'approved', parsedPoints);
+                                        } else {
+                                          alert("Please enter a valid number");
+                                        }
+                                      }
+                                    }}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition"
+                                  >
+                                    Approve (Custom)
+                                  </button>
+                                  <button
+                                    onClick={() => handleGrade(sub._id, 'rejected', 0)}
+                                    className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Retake Request Controls */}
+                            {sub.retake_status === 'pending' && (
+                              <div className="border-t border-yellow-200 bg-yellow-50 p-3 mt-4 rounded">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-semibold text-yellow-800">⚠️ Retake Requested</span>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleRetake(sub._id, 'approved')}
+                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                                    >
+                                      Approve Retake
+                                    </button>
+                                    <button
+                                      onClick={() => handleRetake(sub._id, 'rejected')}
+                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700"
+                                    >
+                                      Reject Request
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        ))
+                    )}
                   </div>
                 )}
               </div>

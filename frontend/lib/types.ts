@@ -15,6 +15,7 @@ export interface User {
 
 export interface Institution {
   id: string;
+  _id?: string;
   name: string;
   type: 'school' | 'college' | 'ngo';
   address?: string;
@@ -61,9 +62,14 @@ export interface Quiz {
   class_number?: string;
   total_marks: number;
   time_limit?: number;
-  questions?: QuizQuestion[];
+  questions?: QuizQuestion[] | { length: number };
   created_at?: string;
   updated_at?: string;
+  stats?: {
+    attempts: number;
+    avgScore: number;
+    maxScore?: number;
+  };
 }
 
 export interface QuizQuestion {

@@ -6,6 +6,9 @@ const QuizAnswer = require('../models/QuizAnswer');
 const RetakeRequest = require('../models/RetakeRequest');
 const StudentStats = require('../models/StudentStats');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
+const { generateQuiz } = require('../utils/ai');
+const InternalAssessment = require('../models/InternalAssessment');
+const User = require('../models/User'); // Import User for password verification
 
 const router = express.Router();
 
@@ -33,12 +36,21 @@ router.get('/', authMiddleware, async (req, res) => {
     // Fetch question counts for each quiz to display "Questions: X" correctly
     const quizzesWithCounts = await Promise.all(quizzes.map(async (quiz) => {
       const questionCount = await QuizQuestion.countDocuments({ quiz_id: quiz._id });
-      const attemptsCount = await QuizAttempt.countDocuments({ quiz_id: quiz._id });
 
-      // Calculate average score
-      const attempts = await QuizAttempt.find({ quiz_id: quiz._id, status: 'completed' }).select('percentage');
+      let attemptsQuery = { quiz_id: quiz._id, status: 'completed' };
+      if (req.user.role === 'student') {
+        attemptsQuery.student_id = req.user._id;
+      }
+
+      const attemptsCount = await QuizAttempt.countDocuments(attemptsQuery);
+
+      // Calculate average and max score
+      const attempts = await QuizAttempt.find(attemptsQuery).select('percentage');
       const avgScore = attempts.length > 0
         ? attempts.reduce((acc, curr) => acc + curr.percentage, 0) / attempts.length
+        : 0;
+      const maxScore = attempts.length > 0
+        ? Math.max(...attempts.map(a => a.percentage))
         : 0;
 
       return {
@@ -46,7 +58,8 @@ router.get('/', authMiddleware, async (req, res) => {
         questions: { length: questionCount }, // Mock object to match frontend expectation
         stats: {
           attempts: attemptsCount,
-          avgScore: Math.round(avgScore)
+          avgScore: Math.round(avgScore),
+          maxScore: Math.round(maxScore)
         }
       };
     }));
@@ -155,8 +168,10 @@ router.get('/:id', authMiddleware, async (req, res) => {
         status: 'pending'
       });
 
-      const allowedAttempts = 1 + approvedRequests;
-      const canAttempt = attemptsCount < allowedAttempts;
+      // Allow unlimited attempts for Smart Practice quizzes
+      const isSmartPractice = quiz.title.startsWith('Smart Practice');
+      const allowedAttempts = isSmartPractice ? Infinity : 1 + approvedRequests;
+      const canAttempt = isSmartPractice ? true : attemptsCount < allowedAttempts;
 
       return res.json({
         ...quiz.toObject(),
@@ -246,8 +261,8 @@ router.put('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async (re
   }
 });
 
-// Delete quiz (teacher/admin)
-router.delete('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async (req, res) => {
+// Delete quiz (teacher/admin/student with password)
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
 
@@ -255,10 +270,35 @@ router.delete('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async 
       return res.status(404).json({ error: 'Quiz not found' });
     }
 
-    // Teachers can only delete their own quizzes
-    if (req.user.role === 'teacher' && quiz.teacher_id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Access denied' });
+    // Role-based Deletion Logic
+    if (req.user.role === 'student') {
+      const { password } = req.body;
+
+      // 1. Verify Ownership (Must be their own smart practice quiz)
+      if (quiz.teacher_id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Access denied. You can only delete your own practice quizzes.' });
+      }
+
+      // 2. Verify Password
+      if (!password) {
+        return res.status(400).json({ error: 'Password is required to confirm deletion.' });
+      }
+
+      // Fetch user with password
+      const user = await User.findById(req.user._id).select('+password');
+      const isMatch = await user.comparePassword(password);
+
+      if (!isMatch) {
+        return res.status(401).json({ error: 'Incorrect password. Deletion cancelled.' });
+      }
+
+    } else if (req.user.role === 'teacher') {
+      // Teacher Logic (Existing)
+      if (quiz.teacher_id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
+    // Admin can delete anything
 
     // Delete related data
     await QuizQuestion.deleteMany({ quiz_id: req.params.id });
@@ -336,6 +376,20 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
     attempt.completed_at = Date.now();
     await attempt.save();
 
+    // Get my attempts (student)
+    router.get('/:id/my-attempts', authMiddleware, roleMiddleware('student'), async (req, res) => {
+      try {
+        const attempts = await QuizAttempt.find({
+          quiz_id: req.params.id,
+          student_id: req.user._id
+        }).sort({ created_at: -1 });
+
+        res.json(attempts);
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Update student stats
     let stats = await StudentStats.findOne({ student_id: req.user._id });
     if (!stats) {
@@ -362,6 +416,59 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
   }
 });
 
+// Get detailed attempt result (student) - New Endpoint for Result Page
+router.get('/attempt/:id/details', authMiddleware, roleMiddleware('student'), async (req, res) => {
+  try {
+    const attempt = await QuizAttempt.findById(req.params.id)
+      .populate('quiz_id')
+      .populate('student_id', 'full_name');
+
+    if (!attempt) {
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+
+    // Verify it's the student's own attempt
+    if (attempt.student_id._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all answers for this attempt
+    const answers = await QuizAnswer.find({ attempt_id: attempt._id })
+      .populate('question_id'); // Populate question details including correct answer and explanation
+
+    // Transform to user-friendly format
+    const detailedResults = answers.map(ans => {
+      const q = ans.question_id;
+      return {
+        questionId: q._id,
+        questionText: q.question_text,
+        options: q.options,
+        userAnswer: ans.student_answer,
+        correctAnswer: q.correct_answer,
+        isCorrect: ans.is_correct,
+        marksObtained: ans.marks_obtained,
+        explanation: q.explanation,
+        subject: q.subject,
+        focusArea: q.focus_area
+      };
+    });
+
+    res.json({
+      attempt: {
+        score: attempt.score,
+        totalMarks: attempt.total_marks,
+        percentage: attempt.percentage,
+        completedAt: attempt.completed_at
+      },
+      quizTitle: attempt.quiz_id.title,
+      questions: detailedResults
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get quiz attempts (teacher and admin)
 router.get('/:id/attempts', authMiddleware, roleMiddleware('teacher', 'admin'), async (req, res) => {
   try {
@@ -382,6 +489,322 @@ router.get('/:id/attempts', authMiddleware, roleMiddleware('teacher', 'admin'), 
     res.json(attempts);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Smart Practice: Generate Adaptive Quiz
+router.post('/smart-practice', authMiddleware, roleMiddleware('student'), async (req, res) => {
+  try {
+    const studentId = req.user._id;
+
+    // 1. Fetch Exam Planner Data (Internal Assessment Marks)
+    const assessments = await InternalAssessment.find({ student_id: studentId });
+
+    if (!assessments || assessments.length === 0) {
+      return res.status(400).json({
+        error: 'No exam planner data found. Please add subjects in Exam Planner first.'
+      });
+    }
+
+    // Parse focus_areas - handle comma-separated values
+    const parseFocusAreas = (focusAreasString) => {
+      if (!focusAreasString || typeof focusAreasString !== 'string') return [];
+      return focusAreasString.split(',').map(area => area.trim()).filter(area => area.length > 0);
+    };
+
+    const examPlannerData = assessments.map(a => ({
+      subject: a.subject_name,
+      marks: a.internal_marks_obtained,
+      totalMarks: a.total_internal_marks,
+      focusAreas: parseFocusAreas(a.focus_areas)
+    }));
+
+    // 2. Fetch Previous Quiz Analytics (Last 5 attempts)
+    const attempts = await QuizAttempt.find({ student_id: studentId })
+      .sort({ created_at: -1 })
+      .limit(5)
+      .populate('quiz_id');
+
+    // Extract subject-wise accuracy and incorrect focus areas from previous attempts
+    const subjectAccuracy = {};
+    const weakFocusAreas = {};
+    const allSubjects = new Set(examPlannerData.map(e => e.subject));
+
+    // Initialize subject tracking
+    allSubjects.forEach(subject => {
+      subjectAccuracy[subject] = { correct: 0, total: 0 };
+      weakFocusAreas[subject] = [];
+    });
+
+    // Analyze previous quiz attempts
+    for (const attempt of attempts) {
+      if (attempt.status !== 'completed') continue;
+
+      try {
+        // Get all answers for this attempt
+        const answers = await QuizAnswer.find({ attempt_id: attempt._id })
+          .populate({
+            path: 'question_id',
+            select: 'subject focus_area'
+          });
+
+        for (const answer of answers) {
+          const question = answer.question_id;
+          if (!question || !question.subject) continue;
+
+          // Find matching subject (case-insensitive)
+          const matchingSubject = [...allSubjects].find(s =>
+            s.toLowerCase() === question.subject.toLowerCase()
+          );
+
+          if (matchingSubject) {
+            subjectAccuracy[matchingSubject].total++;
+            if (answer.is_correct) {
+              subjectAccuracy[matchingSubject].correct++;
+            } else {
+              // Track incorrect focus areas
+              if (question.focus_area) {
+                const focusArea = String(question.focus_area).trim();
+                if (focusArea && !weakFocusAreas[matchingSubject].includes(focusArea)) {
+                  weakFocusAreas[matchingSubject].push(focusArea);
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error analyzing attempt ${attempt._id}:`, error);
+        // Continue with other attempts
+      }
+    }
+
+    // Calculate subject-wise accuracy percentages
+    const subjectAccuracyPercentages = {};
+    Object.keys(subjectAccuracy).forEach(subject => {
+      const { correct, total } = subjectAccuracy[subject];
+      if (total > 0) {
+        subjectAccuracyPercentages[subject] = Math.round((correct / total) * 100);
+      } else {
+        subjectAccuracyPercentages[subject] = null; // No data
+      }
+    });
+
+    // Determine overall performance trend
+    let overallPerformance = 'average';
+    if (attempts.length >= 2) {
+      const recent = attempts.slice(0, Math.min(2, attempts.length)).map(a => a.percentage || 0);
+      const older = attempts.slice(2, Math.min(4, attempts.length)).map(a => a.percentage || 0);
+      const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const olderAvg = older.length > 0 ? older.reduce((a, b) => a + b, 0) / older.length : recentAvg;
+
+      if (recentAvg > olderAvg + 5) {
+        overallPerformance = 'improving';
+      } else if (recentAvg < olderAvg - 5) {
+        overallPerformance = 'declining';
+      } else {
+        overallPerformance = 'stagnant';
+      }
+    } else if (attempts.length === 1) {
+      // Single attempt - can't determine trend, default to average
+      overallPerformance = 'average';
+    } else {
+      // No attempts - default to average
+      overallPerformance = 'average';
+    }
+
+    // Format previousQuizRemarks to match expected structure
+    const previousQuizRemarks = {
+      overallPerformance: overallPerformance,
+      subjectAccuracy: subjectAccuracyPercentages,
+      weakFocusAreas: weakFocusAreas
+    };
+
+    const contextData = {
+      examPlanner: examPlannerData,
+      previousQuizRemarks: previousQuizRemarks
+    };
+
+    // Validate context data before sending to AI
+    if (!examPlannerData || examPlannerData.length === 0) {
+      throw new Error('No exam planner data available for quiz generation');
+    }
+
+    console.log('Preparing to generate quiz:', {
+      subjects: examPlannerData.map(e => e.subject),
+      totalSubjects: examPlannerData.length,
+      previousAttempts: previousQuizRemarks.overallPerformance
+    });
+
+    // 3. Generate Quiz using AI
+    const aiResult = await generateQuiz(contextData);
+
+    if (!aiResult || !aiResult.quiz || !Array.isArray(aiResult.quiz)) {
+      throw new Error('Invalid AI response structure: missing or invalid quiz array');
+    }
+
+    if (!aiResult.remarks || typeof aiResult.remarks !== 'object') {
+      throw new Error('Invalid AI response structure: missing remarks object');
+    }
+
+    // Validate quiz has exactly 25 questions
+    if (aiResult.quiz.length !== 25) {
+      console.error(`Error: AI generated ${aiResult.quiz.length} questions, expected exactly 25`);
+      throw new Error(`Quiz must contain exactly 25 questions, but received ${aiResult.quiz.length}`);
+    }
+
+    // Validate each question has required fields
+    aiResult.quiz.forEach((q, idx) => {
+      if (!q.question || typeof q.question !== 'string') {
+        throw new Error(`Question ${idx + 1} is missing or invalid question text`);
+      }
+      if (!q.options || !Array.isArray(q.options) || q.options.length !== 4) {
+        throw new Error(`Question ${idx + 1} must have exactly 4 options as an array`);
+      }
+      if (!q.correctAnswer || typeof q.correctAnswer !== 'string') {
+        throw new Error(`Question ${idx + 1} is missing or invalid correctAnswer`);
+      }
+      if (!q.subject || typeof q.subject !== 'string') {
+        throw new Error(`Question ${idx + 1} is missing or invalid subject`);
+      }
+      // Validate subject matches exam planner (case-insensitive comparison)
+      const subjectExists = examPlannerData.some(e =>
+        e.subject.toLowerCase() === q.subject.toLowerCase()
+      );
+      if (!subjectExists) {
+        throw new Error(`Question ${idx + 1} has subject "${q.subject}" which is not in Exam Planner. Available subjects: ${examPlannerData.map(e => e.subject).join(', ')}`);
+      }
+
+      // Use exact subject name from exam planner to ensure consistency
+      const matchingSubject = examPlannerData.find(e =>
+        e.subject.toLowerCase() === q.subject.toLowerCase()
+      );
+      if (matchingSubject) {
+        q.subject = matchingSubject.subject; // Use exact case from exam planner
+      }
+      // Validate difficulty
+      if (q.difficulty && !['easy', 'medium', 'hard'].includes(q.difficulty)) {
+        q.difficulty = 'medium'; // Default to medium if invalid
+      } else if (!q.difficulty) {
+        q.difficulty = 'medium'; // Default if missing
+      }
+    });
+
+    // 4. Save Generated Quiz to DB
+    const quizTitle = `Smart Practice - ${new Date().toLocaleDateString()}`;
+
+    const newQuiz = new Quiz({
+      title: quizTitle,
+      teacher_id: studentId,
+      description: "AI-Generated Adaptive Quiz based on your Exam Planner performance.",
+      class_number: "N/A",
+      subject_name: "General",
+      total_marks: aiResult.quiz.length * 1,
+      time_limit: 30,
+      is_active: true
+    });
+
+    await newQuiz.save();
+
+    // Save Questions with subject, focusArea, difficulty, and explanation
+    const questionDocs = aiResult.quiz.map((q, index) => {
+      // Convert options array to object format for MongoDB Map
+      let optionsObj = {};
+      if (Array.isArray(q.options) && q.options.length === 4) {
+        q.options.forEach((opt, idx) => {
+          const key = String.fromCharCode(65 + idx); // A, B, C, D
+          optionsObj[key] = String(opt).trim();
+        });
+      } else {
+        throw new Error(`Question ${index + 1} has invalid options format`);
+      }
+
+      // Normalize correctAnswer - it might be "Option A" or just "A" or the full text
+      let normalizedCorrectAnswer = String(q.correctAnswer).trim();
+
+      // If it's like "Option A", extract "A"
+      if (normalizedCorrectAnswer.startsWith('Option ')) {
+        normalizedCorrectAnswer = normalizedCorrectAnswer.replace('Option ', '').trim();
+      }
+
+      // If it's a letter (A, B, C, D), use it directly
+      // If it's the full option text, find the matching key
+      if (['A', 'B', 'C', 'D'].includes(normalizedCorrectAnswer.toUpperCase())) {
+        normalizedCorrectAnswer = normalizedCorrectAnswer.toUpperCase();
+      } else {
+        // Try to match by text content
+        const matchingKey = Object.keys(optionsObj).find(key =>
+          optionsObj[key].toLowerCase() === normalizedCorrectAnswer.toLowerCase()
+        );
+        if (matchingKey) {
+          normalizedCorrectAnswer = matchingKey;
+        } else {
+          // Default to first option if no match found
+          console.warn(`Question ${index + 1}: Could not match correctAnswer "${q.correctAnswer}", defaulting to "A"`);
+          normalizedCorrectAnswer = 'A';
+        }
+      }
+
+      return {
+        quiz_id: newQuiz._id,
+        question_text: String(q.question).trim(),
+        options: optionsObj,
+        correct_answer: normalizedCorrectAnswer,
+        marks: 1,
+        order_index: index,
+        subject: String(q.subject).trim(),
+        focus_area: q.focusArea ? String(q.focusArea).trim() : null,
+        difficulty: q.difficulty || 'medium',
+        explanation: q.explanation ? String(q.explanation).trim() : null
+      };
+    });
+
+    await QuizQuestion.insertMany(questionDocs);
+
+    // Verify all subjects are represented
+    const subjectsInQuiz = new Set(questionDocs.map(q => q.subject));
+    const subjectsInPlanner = new Set(examPlannerData.map(e => e.subject));
+    const missingSubjects = [...subjectsInPlanner].filter(s => !subjectsInQuiz.has(s));
+
+    if (missingSubjects.length > 0) {
+      console.warn(`Warning: The following subjects from Exam Planner are not represented in the quiz: ${missingSubjects.join(', ')}`);
+    }
+
+    res.json({
+      quizId: newQuiz._id,
+      totalQuestions: questionDocs.length,
+      remarks: aiResult.remarks
+    });
+
+  } catch (error) {
+    console.error('Smart Practice Generation Error:', {
+      message: error.message,
+      stack: error.stack,
+      studentId: req.user?._id
+    });
+
+    // Provide user-friendly error messages
+    let errorMessage = error.message || 'Server error';
+    let statusCode = 500;
+
+    // Handle specific error types
+    if (error.message.includes('GEMINI_API_KEY')) {
+      errorMessage = 'AI service configuration error. Please contact administrator.';
+      statusCode = 500;
+    } else if (error.message.includes('No exam planner data')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    } else if (error.message.includes('exactly 25 questions')) {
+      errorMessage = 'Quiz generation failed: Invalid question count. Please try again.';
+      statusCode = 500;
+    } else if (error.message.includes('parse') || error.message.includes('JSON')) {
+      errorMessage = 'Quiz generation failed: Invalid response format. Please try again.';
+      statusCode = 500;
+    } else if (error.message.includes('API')) {
+      errorMessage = `AI service error: ${error.message}`;
+      statusCode = 500;
+    }
+
+    res.status(statusCode).json({ error: errorMessage });
   }
 });
 

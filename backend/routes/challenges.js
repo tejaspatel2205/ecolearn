@@ -2,6 +2,7 @@ const express = require('express');
 const Challenge = require('../models/Challenge');
 const ChallengeSubmission = require('../models/ChallengeSubmission');
 const StudentStats = require('../models/StudentStats');
+const User = require('../models/User');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -24,8 +25,42 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const challenges = await Challenge.find(query)
       .populate('teacher_id', 'full_name')
-      .sort({ created_at: -1 });
-    res.json(challenges);
+      .sort({ created_at: -1 })
+      .lean();
+
+    // Aggregate stats for each challenge
+    const challengesWithStats = await Promise.all(challenges.map(async (challenge) => {
+      const submissionCount = await ChallengeSubmission.countDocuments({
+        challenge_id: challenge._id,
+        status: { $ne: 'rejected' } // Count approved and pending
+      });
+
+      const approvedCount = await ChallengeSubmission.countDocuments({
+        challenge_id: challenge._id,
+        status: 'approved'
+      });
+
+      // Calculate total potential students
+      let totalStudents = 0;
+      if (challenge.class_number) {
+        totalStudents = await User.countDocuments({ role: 'student', class_number: challenge.class_number });
+      } else {
+        totalStudents = await User.countDocuments({ role: 'student' });
+      }
+
+      const completionRate = totalStudents > 0 ? Math.round((approvedCount / totalStudents) * 100) : 0;
+
+      return {
+        ...challenge,
+        stats: {
+          submissions: submissionCount,
+          approved: approvedCount,
+          completionRate: completionRate
+        }
+      };
+    }));
+
+    res.json(challengesWithStats);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -38,7 +73,22 @@ router.get('/:id', authMiddleware, async (req, res) => {
     if (!challenge) {
       return res.status(404).json({ error: 'Challenge not found' });
     }
-    res.json(challenge);
+
+    let result = challenge.toObject();
+
+    // If student, check for submission
+    if (req.user.role === 'student') {
+      const submission = await ChallengeSubmission.findOne({
+        challenge_id: req.params.id,
+        student_id: req.user._id
+      });
+
+      if (submission) {
+        result.my_submission = submission;
+      }
+    }
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -112,14 +162,17 @@ router.delete('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async 
 // Submit challenge (student)
 router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req, res) => {
   try {
+    console.log(`[DEBUG] POST /challenges/:id/submit - User ${req.user._id} submitting challenge ${req.params.id}`);
     let submission = await ChallengeSubmission.findOne({
       challenge_id: req.params.id,
       student_id: req.user._id
     });
 
     if (submission) {
+      console.log(`[DEBUG] Found existing submission ${submission._id} status ${submission.status} retake ${submission.retake_status}`);
       if (submission.status === 'approved') {
         if (submission.retake_status !== 'approved') {
+          console.log(`[DEBUG] Blocked submission: Retake permission required`);
           return res.status(403).json({ error: 'You need permission to retake this challenge' });
         }
         // Reset for retake
@@ -142,6 +195,7 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
         submission.submitted_at = Date.now();
       }
     } else {
+      console.log(`[DEBUG] Creating new submission`);
       submission = new ChallengeSubmission({
         challenge_id: req.params.id,
         student_id: req.user._id,
@@ -154,6 +208,7 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
     await submission.save();
     res.status(201).json(submission);
   } catch (error) {
+    console.error(`[DEBUG] Error in POST /submit:`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -258,6 +313,31 @@ router.post('/submission/:id/grade', authMiddleware, roleMiddleware('teacher'), 
   }
 });
 
+// Get retake requests (Teacher)
+router.get('/teacher/requests', authMiddleware, roleMiddleware('teacher'), async (req, res) => {
+  try {
+    const ChallengeSubmission = require('../models/ChallengeSubmission');
+    // Find submissions with pending retake status where the challenge belongs to this teacher
+    // We need to filter by teacher's challenges first or populate and filter
+
+    // Efficient way: Find all challenges by this teacher first
+    const challenges = await Challenge.find({ teacher_id: req.user._id }).select('_id');
+    const challengeIds = challenges.map(c => c._id);
+
+    const requests = await ChallengeSubmission.find({
+      challenge_id: { $in: challengeIds },
+      retake_status: 'pending'
+    })
+      .populate('student_id', 'full_name email')
+      .populate('challenge_id', 'title')
+      .sort({ updated_at: -1 }); // Assuming updated_at changes when status changes
+
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Handle retake request (teacher)
 router.post('/submission/:id/handle-retake', authMiddleware, roleMiddleware('teacher'), async (req, res) => {
   try {
@@ -277,4 +357,3 @@ router.post('/submission/:id/handle-retake', authMiddleware, roleMiddleware('tea
 });
 
 module.exports = router;
-

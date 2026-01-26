@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Class, Lesson, Quiz, Challenge } from '@/lib/types';
 import { getClasses, getLessons, getQuizzes, getChallenges, getTeacherStats } from '@/lib/api';
 import Link from 'next/link';
-import { BookOpen, FileText, Users, BarChart3, Plus, Trophy } from 'lucide-react';
+import { BookOpen, FileText, Users, BarChart3, Plus, Trophy, Clock } from 'lucide-react';
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
@@ -189,6 +189,17 @@ export default function TeacherDashboard() {
                 <h3 className="font-semibold text-gray-900">View Challenges</h3>
               </div>
             </Link>
+
+            <Link
+              href="/dashboard/teacher/exam-planner"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow border-2 border-dashed border-indigo-200 hover:border-indigo-500"
+            >
+              <div className="text-center">
+                <BarChart3 className="w-12 h-12 text-indigo-400 mx-auto mb-4" />
+                <h3 className="font-semibold text-gray-900">Exam Planner & Progress</h3>
+              </div>
+            </Link>
+
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

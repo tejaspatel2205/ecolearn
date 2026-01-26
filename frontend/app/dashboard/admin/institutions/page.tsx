@@ -33,7 +33,12 @@ export default function ManageInstitutions() {
   const loadInstitutions = async () => {
     try {
       const data = await getInstitutions();
-      setInstitutions(data);
+      // Ensure id exists (fallback to _id)
+      const normalizedData = data.map((inst: any) => ({
+        ...inst,
+        id: inst.id || inst._id
+      }));
+      setInstitutions(normalizedData);
     } catch (error) {
       console.error('Error loading institutions:', error);
     } finally {
@@ -61,12 +66,14 @@ export default function ManageInstitutions() {
       let data;
       if (editingInstitution) {
         data = await updateInstitution(editingInstitution.id, formData);
+        const normalized = { ...data, id: data.id || data._id };
         setInstitutions(institutions.map(inst =>
-          inst.id === editingInstitution.id ? data : inst
+          inst.id === editingInstitution.id ? normalized : inst
         ));
       } else {
         data = await createInstitution(formData);
-        setInstitutions([...institutions, data]);
+        const normalized = { ...data, id: data.id || data._id };
+        setInstitutions([...institutions, normalized]);
       }
       resetForm();
     } catch (error) {
@@ -231,7 +238,7 @@ export default function ManageInstitutions() {
           {/* Institutions Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredInstitutions.map((institution) => (
-              <div key={institution.id} className="bg-white rounded-lg shadow-md p-6">
+              <div key={institution.id || institution._id} className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">{institution.name}</h3>
@@ -247,7 +254,7 @@ export default function ManageInstitutions() {
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => deleteInstitutionHandler(institution.id)}
+                      onClick={() => deleteInstitutionHandler(institution.id || institution._id!)}
                       className="text-red-600 hover:text-red-800"
                     >
                       <Trash2 className="w-4 h-4" />

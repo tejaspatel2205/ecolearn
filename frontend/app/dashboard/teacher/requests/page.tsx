@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
-import { Check, X, Clock, User, FileText } from 'lucide-react';
+import { Check, X, Clock, User, FileText, Trophy } from 'lucide-react';
 
 export default function RetakeRequestsPage() {
     const { user } = useAuth();
@@ -20,13 +20,50 @@ export default function RetakeRequestsPage() {
     const loadRequests = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:3001/api/quizzes/teacher/requests', {
+
+            // Fetch Quiz Requests
+            const quizResponse = await fetch('http://localhost:3001/api/quizzes/teacher/requests', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const data = await response.json();
-            if (Array.isArray(data)) {
-                setRequests(data);
+            const quizData = await quizResponse.json();
+
+            // Fetch Challenge Requests
+            // Assuming this endpoint exists and returns similar structure
+            let challengeData = [];
+            try {
+                const challengeResponse = await fetch('http://localhost:3001/api/challenges/teacher/requests', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (challengeResponse.ok) {
+                    challengeData = await challengeResponse.json();
+                }
+            } catch (e) {
+                console.warn("Could not fetch challenge requests", e);
             }
+
+            // Normalize and Merge
+            const normalizedQuizzes = Array.isArray(quizData) ? quizData.map((r: any) => ({
+                ...r,
+                type: 'quiz',
+                itemName: r.quiz_id?.title || 'Unknown Quiz',
+                itemId: r.quiz_id?._id
+            })) : [];
+
+            const normalizedChallenges = Array.isArray(challengeData) ? challengeData.map((r: any) => ({
+                ...r,
+                type: 'challenge',
+                itemName: r.challenge_id?.title || 'Unknown Challenge',
+                itemId: r.challenge_id?._id
+            })) : [];
+
+            // Sort by date created/updated
+            const merged = [...normalizedQuizzes, ...normalizedChallenges].sort((a, b) => {
+                const dateA = new Date(a.created_at || a.updated_at).getTime();
+                const dateB = new Date(b.created_at || b.updated_at).getTime();
+                return dateB - dateA;
+            });
+
+            setRequests(merged);
         } catch (error) {
             console.error('Error loading requests:', error);
         } finally {
@@ -34,24 +71,41 @@ export default function RetakeRequestsPage() {
         }
     };
 
-    const handleAction = async (requestId: string, status: 'approved' | 'rejected') => {
+    const handleAction = async (request: any, status: 'approved' | 'rejected') => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:3001/api/quizzes/requests/${requestId}`, {
-                method: 'PUT',
+            let url = '';
+            let method = '';
+            let body = {};
+
+            if (request.type === 'quiz') {
+                url = `http://localhost:3001/api/quizzes/requests/${request._id}`;
+                method = 'PUT';
+                body = { status };
+            } else if (request.type === 'challenge') {
+                // Endpoint for challenge retake handling
+                // Note: The challenge submission endpoint expects /submission/:id/handle-retake
+                // And the request object for challenge is actually the submission object itself
+                url = `http://localhost:3001/api/challenges/submission/${request._id}/handle-retake`;
+                method = 'POST';
+                body = { status };
+            }
+
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ status })
+                body: JSON.stringify(body)
             });
 
             if (response.ok) {
-                // Remove from list or update status locally
-                setRequests(requests.filter(r => r._id !== requestId));
+                setRequests(requests.filter(r => r._id !== request._id));
                 alert(`Request ${status} successfully`);
             } else {
-                alert('Failed to update request');
+                const err = await response.json();
+                alert(`Failed to update request: ${err.error || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Error updating request:', error);
@@ -88,8 +142,9 @@ export default function RetakeRequestsPage() {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
@@ -97,6 +152,19 @@ export default function RetakeRequestsPage() {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {requests.map((request) => (
                                         <tr key={request._id}>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    {request.type === 'quiz' ? (
+                                                        <span className="flex items-center text-blue-600 bg-blue-100 px-2 py-1 rounded-full text-xs font-medium">
+                                                            <FileText className="w-3 h-3 mr-1" /> Quiz
+                                                        </span>
+                                                    ) : (
+                                                        <span className="flex items-center text-orange-600 bg-orange-100 px-2 py-1 rounded-full text-xs font-medium">
+                                                            <Trophy className="w-3 h-3 mr-1" /> Challenge
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
                                                     <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
@@ -109,17 +177,14 @@ export default function RetakeRequestsPage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <FileText className="h-5 w-5 text-gray-400 mr-2" />
-                                                    <span className="text-sm text-gray-900">{request.quiz_id?.title || 'Unknown Quiz'}</span>
-                                                </div>
+                                                <div className="text-sm text-gray-900 font-medium">{request.itemName}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {new Date(request.created_at).toLocaleDateString()}
+                                                {new Date(request.created_at || request.updated_at).toLocaleDateString()}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <button
-                                                    onClick={() => handleAction(request._id, 'approved')}
+                                                    onClick={() => handleAction(request, 'approved')}
                                                     className="text-green-600 hover:text-green-900 mr-4 bg-green-50 px-3 py-1 rounded-full hover:bg-green-100 transition-colors"
                                                 >
                                                     <span className="flex items-center">
@@ -127,7 +192,7 @@ export default function RetakeRequestsPage() {
                                                     </span>
                                                 </button>
                                                 <button
-                                                    onClick={() => handleAction(request._id, 'rejected')}
+                                                    onClick={() => handleAction(request, 'rejected')}
                                                     className="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 transition-colors"
                                                 >
                                                     <span className="flex items-center">

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Button from './Button';
-import { LogOut, LayoutDashboard, Leaf, Bell } from 'lucide-react';
+import { LogOut, LayoutDashboard, Leaf, Bell, FileText, Sparkles } from 'lucide-react';
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
@@ -25,16 +25,34 @@ export default function Navbar() {
   const fetchRequests = async () => {
     try {
       const token = localStorage.getItem('token');
-      // Ideally we'd have a specific count endpoint, but this works for now
-      const response = await fetch('http://localhost:3001/api/quizzes/teacher/requests', {
+      // Fetch quiz requests
+      const quizResponse = await fetch('http://localhost:3001/api/quizzes/teacher/requests', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (response.ok) {
-        const data = await response.json();
+      let total = 0;
+      if (quizResponse.ok) {
+        const data = await quizResponse.json();
         if (Array.isArray(data)) {
-          setPendingRequests(data.length);
+          total += data.length;
         }
       }
+
+      // Fetch challenge requests
+      try {
+        const challengeResponse = await fetch('http://localhost:3001/api/challenges/teacher/requests', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (challengeResponse.ok) {
+          const data = await challengeResponse.json();
+          if (Array.isArray(data)) {
+            total += data.length;
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch challenge requests', e);
+      }
+
+      setPendingRequests(total);
     } catch (error) {
       console.error('Error fetching requests:', error);
     }
@@ -73,6 +91,13 @@ export default function Navbar() {
                   </Button>
                 </Link>
 
+                <Link href={`/dashboard/${user.role}/exam-planner`}>
+                  <Button variant="ghost" size="sm" className="hidden md:flex text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Exam Planner
+                  </Button>
+                </Link>
+
                 {user.role === 'teacher' && (
                   <Link href="/dashboard/teacher/requests" className="relative group">
                     <div className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors relative">
@@ -84,6 +109,15 @@ export default function Navbar() {
                         </span>
                       )}
                     </div>
+                  </Link>
+                )}
+
+                {user.role === 'student' && (
+                  <Link href="/dashboard/student/smart-practice">
+                    <Button variant="ghost" size="sm" className="hidden md:flex text-amber-600 hover:bg-amber-50 hover:text-amber-700">
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Smart Practice
+                    </Button>
                   </Link>
                 )}
 

@@ -177,6 +177,15 @@ export default function AdminDashboard() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Global Leaderboard</h3>
               <p className="text-gray-600 text-sm">View and manage global rankings</p>
             </Link>
+
+            <Link
+              href="/dashboard/admin/exam-planner"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow ring-1 ring-indigo-100"
+            >
+              <BarChart3 className="w-8 h-8 text-indigo-500 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Exam Planner</h3>
+              <p className="text-gray-600 text-sm">Monitor academic policy and assessments</p>
+            </Link>
           </div>
         </div>
       </div>

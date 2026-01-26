@@ -22,33 +22,24 @@ export default function ChallengeDetailPage() {
   useEffect(() => {
     if (user && params.id) {
       loadChallenge();
-      loadSubmission();
     }
   }, [user, params.id]);
 
   const loadChallenge = async () => {
     try {
       const challengeData = await getChallenge(params.id as string);
-      if (challengeData) setChallenge(challengeData);
+      if (challengeData) {
+        setChallenge(challengeData);
+        // Check for submission included in response
+        if (challengeData.my_submission) {
+          setSubmission(challengeData.my_submission);
+          setSubmissionText(challengeData.my_submission.submission_text || '');
+        }
+      }
     } catch (error) {
       console.error('Error loading challenge:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadSubmission = async () => {
-    try {
-      const progress = await getStudentProgress();
-      if (progress) {
-        const challengeProgress = progress.find((p: any) => p.challenge_id === params.id);
-        if (challengeProgress && challengeProgress.challenge_submission) {
-          setSubmission(challengeProgress.challenge_submission);
-          setSubmissionText(challengeProgress.challenge_submission.submission_text || '');
-        }
-      }
-    } catch (error) {
-      // No submission yet
     }
   };
 
@@ -89,8 +80,15 @@ export default function ChallengeDetailPage() {
       <ProtectedRoute allowedRoles={['student']}>
         <div className="min-h-screen bg-gray-50">
           <Navbar />
-          <div className="container mx-auto px-4 pt-24 pb-8">
-            <p className="text-gray-500">Challenge not found</p>
+          <div className="container mx-auto px-4 pt-24 pb-8 text-center bg-white rounded-lg shadow-sm p-12 max-w-2xl mt-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Challenge Not Found</h2>
+            <p className="text-gray-500 mb-6">The challenge you are looking for might have been removed or does not exist.</p>
+            <Link
+              href="/dashboard/student/challenges"
+              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Back to Challenges
+            </Link>
           </div>
         </div>
       </ProtectedRoute>
@@ -101,10 +99,10 @@ export default function ChallengeDetailPage() {
     <ProtectedRoute allowedRoles={['student']}>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="container mx-auto px-4 pt-32 pb-8 max-w-4xl">
           <Link
             href="/dashboard/student/challenges"
-            className="text-green-600 hover:text-green-700 font-medium mb-4 inline-block"
+            className="inline-flex items-center text-gray-600 hover:text-green-600 font-medium mb-6 transition-colors"
           >
             ← Back to Challenges
           </Link>
@@ -157,7 +155,7 @@ export default function ChallengeDetailPage() {
                                 const { requestChallengeRetake } = await import('@/lib/api');
                                 await requestChallengeRetake(params.id as string);
                                 alert('Retake requested successfully!');
-                                loadSubmission();
+                                loadChallenge();
                               } catch (error) {
                                 alert('Failed to request retake');
                               }
@@ -208,7 +206,7 @@ export default function ChallengeDetailPage() {
               </div>
             )}
 
-            {(!submission || submission.status === 'rejected') && (
+            {(!submission || submission.status === 'rejected' || submission.retake_status === 'approved') && (
               <button
                 onClick={handleSubmit}
                 disabled={submitting || !submissionText.trim()}
