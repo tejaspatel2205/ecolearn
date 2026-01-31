@@ -1,31 +1,44 @@
 const mongoose = require('mongoose');
 
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
 const connectDB = async () => {
-  try {
-    const mongoURI = process.env.MONGODB_URI;
+  const mongoURI = process.env.MONGODB_URI;
 
-    if (!mongoURI) {
-      console.warn('⚠️  MONGODB_URI not set in .env file');
-      return null;
-    }
+  if (!mongoURI) {
+    console.error('❌ MONGODB_URI not set in .env file');
+    return null;
+  }
 
-    // Validate connection string format
-    if (!mongoURI.includes('@') && mongoURI.includes('mongodb+srv://')) {
-      console.error('❌ MongoDB connection string appears to be missing username/password');
-    }
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 5000, // Lower timeout for serverless
+    };
 
     console.log('🔄 Connecting to MongoDB...');
-    const conn = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 10000,
+    cached.promise = mongoose.connect(mongoURI, opts).then((mongoose) => {
+      console.log(`✅ MongoDB Connected: ${mongoose.connection.host}`);
+      return mongoose;
     });
+  }
 
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    console.log(`📊 Database: ${conn.connection.name}`);
-    return conn;
-
+  try {
+    cached.conn = await cached.promise;
+    return cached.conn;
   } catch (error) {
+    cached.promise = null;
     console.error('❌ MongoDB connection error:', error.message);
-    process.exit(1);
+    // Do NOT process.exit(1) in serverless, just throw or return null
+    throw error;
   }
 };
 
