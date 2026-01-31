@@ -9,8 +9,16 @@ dotenv.config();
 const app = express();
 const DEFAULT_PORT = parseInt(process.env.PORT) || 3001;
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB per request (Serverless optimized)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('Database Connection Error:', error);
+    res.status(500).json({ error: 'Database Connection Failed' });
+  }
+});
 
 // Middleware
 app.use((req, res, next) => {
