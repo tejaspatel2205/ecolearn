@@ -74,6 +74,7 @@ export interface Quiz {
 
 export interface QuizQuestion {
   id: string;
+  _id?: string;
   quiz_id: string;
   question_text: string;
   question_type: 'multiple_choice' | 'true_false' | 'short_answer';
@@ -81,6 +82,10 @@ export interface QuizQuestion {
   correct_answer: string;
   marks: number;
   order_index: number;
+  subject?: string;
+  focus_area?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  explanation?: string;
 }
 
 export interface Challenge {

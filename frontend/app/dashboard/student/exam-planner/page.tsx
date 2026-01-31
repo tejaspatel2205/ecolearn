@@ -72,6 +72,8 @@ export default function ExamPlannerStudent() {
 
     const [selectedGuidanceSubject, setSelectedGuidanceSubject] = useState<string | null>(null); // New: Filter for Guidance
     const [guidanceInputSubject, setGuidanceInputSubject] = useState<string>(''); // For manual generation input
+    const [customSubject, setCustomSubject] = useState<string>('');
+    const [customTopic, setCustomTopic] = useState<string>('');
 
     // Chat State
     const [chatInput, setChatInput] = useState('');
@@ -127,7 +129,7 @@ export default function ExamPlannerStudent() {
         try {
             const token = localStorage.getItem('token');
             const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/exam-planner/guidance`,
-                { subject },
+                { subject: subject === 'Others' ? customSubject : subject, topic: subject === 'Others' ? customTopic : undefined },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -155,7 +157,12 @@ export default function ExamPlannerStudent() {
                 if (foundSubject) {
                     setSelectedGuidanceSubject(subject);
                 }
+                if (foundSubject) {
+                    setSelectedGuidanceSubject(subject === 'Others' ? customSubject : subject);
+                }
                 setGuidanceInputSubject(''); // Clear input
+                setCustomSubject('');
+                setCustomTopic('');
             }
         } catch (error: any) {
             console.error("Error fetching AI guidance", error);
@@ -479,37 +486,63 @@ export default function ExamPlannerStudent() {
 
                                         <div className="mt-4 md:mt-0 flex items-center gap-3">
                                             {/* Manual Generation Input */}
-                                            <div className="flex items-center gap-2">
-                                                <select
-                                                    value={guidanceInputSubject}
-                                                    onChange={(e) => setGuidanceInputSubject(e.target.value)}
-                                                    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                >
-                                                    <option value="">Select Subject to Analyze...</option>
-                                                    {uniqueSubjects.map(s => (
-                                                        <option key={s} value={s}>{s}</option>
-                                                    ))}
-                                                </select>
-                                                <button
-                                                    onClick={() => fetchGuidance(guidanceInputSubject)}
-                                                    disabled={!guidanceInputSubject || guidanceLoading}
-                                                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-2 transition-all ${!guidanceInputSubject || guidanceLoading
-                                                        ? 'bg-slate-300 cursor-not-allowed'
-                                                        : 'bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg'
-                                                        }`}
-                                                >
-                                                    {guidanceLoading ? (
-                                                        <>
-                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                                            Analyzing...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Sparkles className="w-4 h-4" />
-                                                            Start Analysis
-                                                        </>
-                                                    )}
-                                                </button>
+                                            <div className="flex flex-col md:flex-row items-end gap-3">
+                                                {guidanceInputSubject === 'Others' && (
+                                                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter Subject Name..."
+                                                                value={customSubject}
+                                                                onChange={(e) => setCustomSubject(e.target.value)}
+                                                                className="pl-3 pr-3 py-2 w-48 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm placeholder:text-slate-400"
+                                                            />
+                                                        </div>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter Specific Topic..."
+                                                                value={customTopic}
+                                                                onChange={(e) => setCustomTopic(e.target.value)}
+                                                                className="pl-3 pr-3 py-2 w-48 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm placeholder:text-slate-400"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center gap-2">
+                                                    <select
+                                                        value={guidanceInputSubject}
+                                                        onChange={(e) => setGuidanceInputSubject(e.target.value)}
+                                                        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer"
+                                                    >
+                                                        <option value="">Select Subject to Analyze...</option>
+                                                        {uniqueSubjects.map(s => (
+                                                            <option key={s} value={s}>{s}</option>
+                                                        ))}
+                                                        <option value="Others" className="font-semibold text-indigo-600">✨ Others (Custom Topic)</option>
+                                                    </select>
+                                                    <button
+                                                        onClick={() => fetchGuidance(guidanceInputSubject)}
+                                                        disabled={!guidanceInputSubject || guidanceLoading || (guidanceInputSubject === 'Others' && (!customSubject || !customTopic))}
+                                                        className={`px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-2 transition-all ${!guidanceInputSubject || guidanceLoading || (guidanceInputSubject === 'Others' && (!customSubject || !customTopic))
+                                                            ? 'bg-slate-300 cursor-not-allowed'
+                                                            : 'bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg'
+                                                            }`}
+                                                    >
+                                                        {guidanceLoading ? (
+                                                            <>
+                                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                                Analyzing...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Sparkles className="w-4 h-4" />
+                                                                Start Analysis
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

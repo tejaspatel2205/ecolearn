@@ -365,7 +365,23 @@ router.post('/guidance', authMiddleware, roleMiddleware('student'), async (req, 
     try {
         const studentId = req.user._id;
 
-        const { subject } = req.body;
+        const { subject, topic } = req.body;
+
+        if (subject && topic) {
+            // CASE 1: Custom Subject/Topic Guidance (No Marks Needed)
+            const contextData = [{
+                subject: subject,
+                topic: topic,
+                isCustom: true,
+                marksObtained: 0,
+                totalMarks: 0,
+                focusAreas: [],
+                remarks: ''
+            }];
+            console.log(`Generating CUSTOM guidance for Student ${studentId} on Subject: ${subject}, Topic: ${topic}`);
+            const aiResult = await generateExamGuidance(contextData);
+            return res.json(aiResult);
+        }
 
         let query = { student_id: studentId };
         if (subject) {

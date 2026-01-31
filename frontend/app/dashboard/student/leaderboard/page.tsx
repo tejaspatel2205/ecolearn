@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLeaderboard } from '@/lib/api';
+import { useSocket } from '@/components/SocketProvider';
 import Link from 'next/link';
 import { Trophy, Medal, Award } from 'lucide-react';
 
@@ -14,11 +15,29 @@ export default function LeaderboardPage() {
   const [userRank, setUserRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     if (user) {
       loadLeaderboard();
     }
   }, [user]);
+
+  // Listen for real-time leaderboard updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = () => {
+      console.log('Leaderboard update received, refreshing...');
+      loadLeaderboard();
+    };
+
+    socket.on('leaderboard_update', handleUpdate);
+
+    return () => {
+      socket.off('leaderboard_update', handleUpdate);
+    };
+  }, [socket]);
 
   const loadLeaderboard = async () => {
     try {
@@ -74,19 +93,19 @@ export default function LeaderboardPage() {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mx-auto"></div>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden border border-white/20">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Rank</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Level</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Points</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Eco Impact</th>
+                  <thead>
+                    <tr className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+                      <th className="px-6 py-5 text-left text-sm font-bold uppercase tracking-wider">Rank</th>
+                      <th className="px-6 py-5 text-left text-sm font-bold uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-5 text-left text-sm font-bold uppercase tracking-wider">Level</th>
+                      <th className="px-6 py-5 text-left text-sm font-bold uppercase tracking-wider">Total Points</th>
+                      <th className="px-6 py-5 text-left text-sm font-bold uppercase tracking-wider">Eco Impact</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-100">
                     {leaderboard.map((entry, index) => {
                       const rank = index + 1;
                       const studentId = entry.student_id?._id || entry.student_id;
@@ -94,20 +113,43 @@ export default function LeaderboardPage() {
                       return (
                         <tr
                           key={`leaderboard-${studentId}-${index}`}
-                          className={isCurrentUser ? 'bg-green-50 font-semibold' : ''}
+                          className={`transition-colors hover:bg-emerald-50/50 ${isCurrentUser ? 'bg-emerald-50 border-l-4 border-emerald-500' : ''
+                            }`}
                         >
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               {getRankIcon(rank)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            {entry.student_id?.full_name || entry.student_id?.email || 'Unknown'}
-                            {isCurrentUser && <span className="ml-2 text-green-600">(You)</span>}
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg mr-3 shadow-sm">
+                                {(entry.student_id?.full_name || '?').charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900">
+                                  {entry.student_id?.full_name || entry.student_id?.email || 'Unknown'}
+                                </div>
+                                {isCurrentUser && <span className="text-xs text-emerald-600 font-bold">You</span>}
+                              </div>
+                            </div>
                           </td>
-                          <td className="px-6 py-4">Level {entry.current_level || 1}</td>
-                          <td className="px-6 py-4 font-semibold text-green-600">{entry.total_points || 0}</td>
-                          <td className="px-6 py-4">{entry.eco_impact_score || 0}</td>
+                          <td className="px-6 py-4">
+                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                              Level {entry.current_level || 1}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-lg font-bold text-gray-900">
+                              {entry.total_points?.toLocaleString() || 0}
+                            </div>
+                            <div className="text-xs text-gray-500">points</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center text-emerald-700 font-medium">
+                              {entry.eco_impact_score || 0}
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}

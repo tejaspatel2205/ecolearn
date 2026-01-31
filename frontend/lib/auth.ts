@@ -4,6 +4,7 @@ export type UserRole = 'student' | 'teacher' | 'admin';
 
 export interface User {
   id: string;
+  _id?: string;
   email: string;
   full_name: string;
   role: UserRole;
@@ -16,25 +17,25 @@ export interface AuthUser extends User {
 
 export async function signUp(email: string, password: string, fullName: string, role: UserRole, institutionId?: string) {
   const response = await apiRegister(email, password, fullName, role, institutionId);
-  
+
   if (response.token) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('token', response.token);
     }
   }
-  
+
   return response;
 }
 
 export async function signIn(email: string, password: string) {
   const response = await apiLogin(email, password);
-  
+
   if (response.token) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('token', response.token);
     }
   }
-  
+
   return response;
 }
 
@@ -53,12 +54,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         return null; // No token, user is not logged in
       }
     }
-    
+
     const user = await apiGetCurrentUser();
     return user as AuthUser;
   } catch (error: any) {
-    // If error is "No token provided" or "Invalid token", user is not logged in
-    if (error.message?.includes('No token') || error.message?.includes('Invalid token') || error.message?.includes('token')) {
+    // If error is "No token provided" or "Invalid token" or "User not found", user is not logged in
+    if (error.message?.includes('No token') ||
+      error.message?.includes('Invalid token') ||
+      error.message?.includes('token') ||
+      error.message?.includes('User not found') ||
+      error.message?.includes('404')) {
       // Clear invalid token
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');

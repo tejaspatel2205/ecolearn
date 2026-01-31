@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { StudentStats, Lesson, Quiz, Challenge } from '@/lib/types';
 import { getStudentStats, getLessons, getQuizzes, getChallenges } from '@/lib/api';
 import { TrendingUp, BookOpen, Trophy, Target, Award, BarChart3, Brain } from 'lucide-react';
+import LiveLeaderboard from '@/components/LiveLeaderboard';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -331,41 +332,54 @@ export default function StudentDashboard() {
           )}
 
           {/* Quick Access */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+          {/* Live Leaderboard - Full Width */}
+          <div className="mt-8">
+            <LiveLeaderboard />
+          </div>
+
+          {/* Academic Tools & Quick Access */}
+          <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">Academic Tools</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Link
               href="/dashboard/student/analytics"
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow"
+              className="bg-white rounded-xl shadow-md p-6 hover:shadow-xl transition-all border border-blue-100 group"
             >
-              <BarChart3 className="w-8 h-8 text-blue-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Performance Analytics</h3>
-              <p className="text-gray-600 text-sm">View your performance and get personalized suggestions</p>
-            </Link>
-
-            <Link
-              href="/dashboard/student/leaderboard"
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow"
-            >
-              <Trophy className="w-8 h-8 text-yellow-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Global Leaderboard</h3>
-              <p className="text-gray-600 text-sm">See how you rank against other students worldwide</p>
-            </Link>
-
-            <Link
-              href="/dashboard/student/challenges"
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow"
-            >
-              <Target className="w-8 h-8 text-green-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Eco Challenges</h3>
-              <p className="text-gray-600 text-sm">Complete real-world environmental challenges</p>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                  <BarChart3 className="w-8 h-8 text-blue-600" />
+                </div>
+                <span className="text-xs font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-full">Insights</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-700 transition-colors">Performance Analytics</h3>
+              <p className="text-gray-600 text-sm">View your performance trends and get personalized AI suggestions.</p>
             </Link>
 
             <Link
               href="/dashboard/student/exam-planner"
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow ring-1 ring-indigo-100"
+              className="bg-white rounded-xl shadow-md p-6 hover:shadow-xl transition-all border border-indigo-100 group"
             >
-              <TrendingUp className="w-8 h-8 text-indigo-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Exam Planner & Progress</h3>
-              <p className="text-gray-600 text-sm">Track your academic journey and predict your grades</p>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 transition-colors">
+                  <TrendingUp className="w-8 h-8 text-indigo-600" />
+                </div>
+                <span className="text-xs font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full">Planning</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-700 transition-colors">Exam Planner</h3>
+              <p className="text-gray-600 text-sm">Track your syllabus progress and predict your upcoming grades.</p>
+            </Link>
+
+            <Link
+              href="/dashboard/student/challenges"
+              className="bg-white rounded-xl shadow-md p-6 hover:shadow-xl transition-all border border-green-100 group"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
+                  <Target className="w-8 h-8 text-green-600" />
+                </div>
+                <span className="text-xs font-bold bg-green-50 text-green-600 px-2 py-1 rounded-full">+ Points</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-green-700 transition-colors">Eco Challenges</h3>
+              <p className="text-gray-600 text-sm">Complete real-world environmental challenges to earn badges.</p>
             </Link>
           </div>
         </div>

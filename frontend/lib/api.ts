@@ -57,12 +57,12 @@ if (typeof window !== 'undefined') {
 }
 
 // Helper function for API calls
-async function apiCall(endpoint: string, options: RequestInit = {}) {
+export async function apiCall(endpoint: string, options: RequestInit = {}) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {}),
   };
 
   // Only add auth header if token exists (for public routes like register/login)
@@ -100,14 +100,14 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
       // Don't log expected errors (no token for auth check endpoints when not logged in)
       const isAuthCheckEndpoint = endpoint.includes('/auth/me') || endpoint.includes('/auth/user');
       const isPublicEndpoint = endpoint.includes('/institutions') && options.method !== 'POST';
-      const isNoTokenError = errorMessage.includes('No token') || errorMessage.includes('token') || errorMessage.includes('auth required');
+      const isNoTokenError = errorMessage.includes('No token') || errorMessage.includes('token') || errorMessage.includes('auth required') || errorMessage.includes('User not found') || errorMessage.includes('Access denied');
 
       // Registration and login endpoints should always show errors
       const isAuthAction = endpoint.includes('/auth/register') || endpoint.includes('/auth/login');
 
       // Only suppress logging for expected "no token" errors on auth check/public endpoints
       // Never suppress errors for registration/login
-      if (isAuthAction || !((isAuthCheckEndpoint || isPublicEndpoint) && isNoTokenError)) {
+      if (isAuthAction || !isNoTokenError) {
         console.error(`[API Error] ${endpoint}:`, errorMessage, errorData);
       } else {
         // Silently handle expected errors for public/auth check endpoints
@@ -445,4 +445,23 @@ export async function deleteInstitution(id: string) {
   return apiCall(`/api/institutions/${id}`, {
     method: 'DELETE'
   });
+}
+
+// AI API
+export async function askAI(question: string, context?: string) {
+  return apiCall('/api/ai/ask', {
+    method: 'POST',
+    body: JSON.stringify({ question, context })
+  });
+}
+
+export async function gradeEssay(question: string, answer: string, rubric?: string) {
+  return apiCall('/api/ai/grade', {
+    method: 'POST',
+    body: JSON.stringify({ question, answer, rubric })
+  });
+}
+
+export async function getMyQuizAttempts(quizId: string) {
+  return apiCall(`/api/quizzes/${quizId}/my-attempts`);
 }

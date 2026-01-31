@@ -37,6 +37,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/exam-planner', require('./routes/examPlanner'));
 app.use('/api/badges', require('./routes/badges'));
+app.use('/api/ai', require('./routes/aiRoutes'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -57,11 +58,41 @@ app.get('/api/port', (req, res) => {
 });
 
 // Start server with automatic port detection
+const http = require('http');
+const { Server } = require('socket.io');
+
+// ... (previous imports)
+
+// Start server with automatic port detection
 async function startServer() {
   try {
     const port = await findAvailablePort(DEFAULT_PORT, 10);
 
-    const server = app.listen(port, () => {
+    // Create HTTP server
+    const server = http.createServer(app);
+
+    // Initialize Socket.IO
+    const io = new Server(server, {
+      cors: {
+        origin: true, // Allow all origins for now (matches app.use(cors))
+        methods: ["GET", "POST"],
+        credentials: true
+      }
+    });
+
+    // Make io accessible to routes
+    app.set('io', io);
+
+    // Socket.IO connection handler
+    io.on('connection', (socket) => {
+      console.log(`🔌 New client connected: ${socket.id}`);
+
+      socket.on('disconnect', () => {
+        console.log(`🔌 Client disconnected: ${socket.id}`);
+      });
+    });
+
+    server.listen(port, () => {
       app.set('port', port);
       console.log(`🚀 EcoLearn Backend API is running on port ${port}`);
       console.log(`📊 Health check: http://localhost:${port}/health`);
@@ -79,6 +110,7 @@ async function startServer() {
         console.error(`❌ Port ${port} became busy, restart the server to find a new port`);
       } else {
         console.error('❌ Server error:', error);
+        process.exit(1);
       }
     });
   } catch (error) {
@@ -87,4 +119,10 @@ async function startServer() {
   }
 }
 
-startServer();
+// Export app for Vercel
+module.exports = app;
+
+// Only start server if running directly
+if (require.main === module) {
+  startServer();
+}

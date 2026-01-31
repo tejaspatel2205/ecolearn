@@ -7,6 +7,7 @@ const RetakeRequest = require('../models/RetakeRequest');
 const StudentStats = require('../models/StudentStats');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 const { generateQuiz } = require('../utils/ai');
+const { _gradeFreeResponseInternal } = require('../controllers/aiController');
 const InternalAssessment = require('../models/InternalAssessment');
 const User = require('../models/User'); // Import User for password verification
 
@@ -93,6 +94,17 @@ router.post('/:id/request-retake', authMiddleware, roleMiddleware('student'), as
     });
 
     await request.save();
+
+    // Emit socket event to teacher
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('retake_request', {
+        student: req.user.full_name,
+        quiz: quiz.title,
+        teacher_id: quiz.teacher_id
+      });
+    }
+
     res.json(request);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -341,7 +353,43 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
 
       // Strict check for multiple choice (exact match expected usually simple like 'A', 'B')
       // For short answer, fuzzy matching is better handling
-      const isCorrect = normalizedStudent === normalizedCorrect;
+      let isCorrect = normalizedStudent === normalizedCorrect;
+      let marksObtained = isCorrect ? question.marks : 0;
+      let gradingMethod = 'exact_match';
+      let gradingFeedback = '';
+      let gradingBreakdown = { grammar: 0, clarity: 0, factual_accuracy: 0 };
+      let aiScore = 0;
+
+      // AI grading for long-form short answers (essay-like) when exact match fails
+      const shouldUseAI =
+        !isCorrect &&
+        question.question_type === 'short_answer' &&
+        typeof studentAnswer === 'string' &&
+        studentAnswer.trim().length >= 60 &&
+        !!process.env.GEMINI_API_KEY;
+
+      if (shouldUseAI) {
+        gradingMethod = 'ai';
+        const rubric = `Grade based on factual accuracy, clarity, grammar, and relevance. Expected idea/answer: "${question.correct_answer}".`;
+
+        const ai = await _gradeFreeResponseInternal({
+          questionText: question.question_text,
+          studentAnswer,
+          rubric
+        });
+
+        aiScore = Number.isFinite(ai?.score) ? Math.max(0, Math.min(100, Math.round(ai.score))) : 0;
+        const fraction = aiScore / 100;
+        marksObtained = Math.round((question.marks * fraction) * 100) / 100;
+        isCorrect = marksObtained >= question.marks;
+
+        gradingFeedback = ai?.feedback ? String(ai.feedback) : '';
+        gradingBreakdown = {
+          grammar: Number.isFinite(ai?.grammar) ? Math.max(0, Math.min(100, Math.round(ai.grammar))) : 0,
+          clarity: Number.isFinite(ai?.clarity) ? Math.max(0, Math.min(100, Math.round(ai.clarity))) : 0,
+          factual_accuracy: Number.isFinite(ai?.factualAccuracy) ? Math.max(0, Math.min(100, Math.round(ai.factualAccuracy))) : 0
+        };
+      }
 
       // Debug log for troubleshooting (can be removed later)
       if (process.env.NODE_ENV !== 'production') {
@@ -351,9 +399,7 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
         console.log(`  Match: ${isCorrect}`);
       }
 
-      if (isCorrect) {
-        totalScore += question.marks;
-      }
+      totalScore += marksObtained;
 
       // Save answer
       const answer = new QuizAnswer({
@@ -361,7 +407,11 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
         question_id: question._id,
         student_answer: studentAnswer,
         is_correct: isCorrect,
-        marks_obtained: isCorrect ? question.marks : 0
+        marks_obtained: marksObtained,
+        grading_method: gradingMethod,
+        grading_feedback: gradingFeedback,
+        grading_breakdown: gradingBreakdown,
+        ai_score: aiScore
       });
       await answer.save();
     }
@@ -375,20 +425,6 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
     attempt.status = 'completed';
     attempt.completed_at = Date.now();
     await attempt.save();
-
-    // Get my attempts (student)
-    router.get('/:id/my-attempts', authMiddleware, roleMiddleware('student'), async (req, res) => {
-      try {
-        const attempts = await QuizAttempt.find({
-          quiz_id: req.params.id,
-          student_id: req.user._id
-        }).sort({ created_at: -1 });
-
-        res.json(attempts);
-      } catch (error) {
-        res.status(500).json({ error: error.message });
-      }
-    });
 
     // Update student stats
     let stats = await StudentStats.findOne({ student_id: req.user._id });
@@ -406,11 +442,31 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
     stats.current_level = Math.max(1, Math.floor(Math.sqrt(stats.total_points / 100)) + 1);
     await stats.save();
 
+    // Emit leaderboard update
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('leaderboard_update');
+    }
+
     res.json({
       score: totalScore,
       total_marks: totalMarks,
       percentage: percentage.toFixed(2)
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get my attempts for a quiz (student)
+router.get('/:id/my-attempts', authMiddleware, roleMiddleware('student'), async (req, res) => {
+  try {
+    const attempts = await QuizAttempt.find({
+      quiz_id: req.params.id,
+      student_id: req.user._id
+    }).sort({ created_at: -1 });
+
+    res.json(attempts);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -447,6 +503,10 @@ router.get('/attempt/:id/details', authMiddleware, roleMiddleware('student'), as
         correctAnswer: q.correct_answer,
         isCorrect: ans.is_correct,
         marksObtained: ans.marks_obtained,
+        gradingMethod: ans.grading_method,
+        gradingFeedback: ans.grading_feedback,
+        gradingBreakdown: ans.grading_breakdown,
+        aiScore: ans.ai_score,
         explanation: q.explanation,
         subject: q.subject,
         focusArea: q.focus_area
@@ -612,11 +672,22 @@ router.post('/smart-practice', authMiddleware, roleMiddleware('student'), async 
       overallPerformance = 'average';
     }
 
+    // Check for high performance in the most recent attempt
+    let highPerformanceMode = false;
+    if (attempts.length > 0) {
+      const lastAttempt = attempts[0];
+      // Check if it was a completed attempt and score > 75%
+      if (lastAttempt.status === 'completed' && lastAttempt.percentage > 75) {
+        highPerformanceMode = true;
+      }
+    }
+
     // Format previousQuizRemarks to match expected structure
     const previousQuizRemarks = {
       overallPerformance: overallPerformance,
       subjectAccuracy: subjectAccuracyPercentages,
-      weakFocusAreas: weakFocusAreas
+      weakFocusAreas: weakFocusAreas,
+      highPerformanceMode: highPerformanceMode // Add flag here
     };
 
     const contextData = {

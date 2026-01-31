@@ -243,16 +243,33 @@ Generate the adaptive academic quiz and remarks now.
 ACTUAL INPUT DATA
 ========================
 ${JSON.stringify(contextData, null, 2)}
+    
+========================
+ADAPTIVE DIFFICULTY INSTRUCTIONS (CRITICAL)
+========================
+${contextData.previousQuizRemarks?.highPerformanceMode ?
+            `
+⚠️ STUDENT PERFORMED EXCEPTIONALLY WELL (>75%) IN LAST QUIZ.
+1. INCREASE DIFFICULTY LEVEL: Questions must be significantly harder (Level +1).
+   - Move from simple recall to application, analysis, and problem-solving.
+   - Use complex scenarios and multi-step problems.
+2. ENSURE UNIQUENESS: 
+   - DO NOT repeat questions from standard pools.
+   - Change numerical values, variable names, and contexts entirely.
+   - If a concept is repeated, ask it from a completely different angle.
+` :
+            `
+Student performance is standard. Maintain a balanced difficulty curve based on the "Difficulty rules" section.
+`}
     `;
 
     try {
         // Try different models with API key in header (recommended method)
         const models = [
+            'gemini-2.0-flash',
             'gemini-2.5-flash',
-            'gemini-2.5-pro',
-            'gemini-1.5-flash',
-            'gemini-1.5-pro',
-            'gemini-pro'
+            'gemini-flash-latest',
+            'gemini-pro-latest'
         ];
 
         let response = null;
@@ -293,10 +310,12 @@ ${JSON.stringify(contextData, null, 2)}
                     error: errorData?.error || errorData
                 });
 
-                // If it's a 404, try next model. Otherwise, throw immediately
-                if (status !== 404) {
+                // If it's a 401 (Auth Error), stop immediately as other models won't work either
+                if (status === 401) {
                     throw error;
                 }
+                // For other errors (404, 429, 500), continue to next model
+                continue;
             }
         }
 
@@ -439,6 +458,14 @@ const generateExamGuidance = async (contextData) => {
 
     // Calculate performance percentages for better analysis
     const enrichedData = contextData.map(item => {
+        if (item.isCustom) {
+            return {
+                ...item,
+                percentage: 'N/A',
+                performanceLevel: 'Exploratory Learning'
+            };
+        }
+
         const percentage = (item.marksObtained / item.totalMarks) * 100;
         let performanceLevel = 'excellent';
         if (percentage < 50) performanceLevel = 'critical';
@@ -468,14 +495,16 @@ ANALYSIS REQUIREMENTS
 For EACH subject in the data, you must:
 
 1. PERFORMANCE ANALYSIS:
-   - Calculate and analyze the current score percentage
+   - Calculate and analyze the current score percentage (SKIP for "Exploratory Learning")
    - Determine performance status: "Excellent" (>85%), "Good" (75-85%), "Average" (60-75%), "Needs Improvement" (50-60%), "Critical Attention" (<50%)
    - Identify specific strengths and weaknesses based on marks obtained
+   - **CRITICAL EXCEPTION**: If performanceLevel is "Exploratory Learning", ignore score analysis. Focus 100% on the requesting "topic" provided in the data.
 
 2. FOCUS AREAS ANALYSIS:
    - If "focusAreas" field contains data, these are WEAK AREAS identified by teachers
    - These areas MUST be prioritized in your guidance
    - If focusAreas is empty or null, analyze based on the low score percentage
+   - **CRITICAL EXCEPTION**: If "isCustom" is true, the "topic" field IS the focus area. Build the entire guidance around mastering this topic.
 
 3. REMARKS ANALYSIS:
    - If "remarks" field contains teacher feedback, incorporate it into your advice
@@ -545,7 +574,7 @@ Generate the guidance now.
 
     try {
         // Try multiple models with header method first
-        const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
+        const models = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
         let response = null;
         let lastError = null;
 
@@ -571,23 +600,24 @@ Generate the guidance now.
                 break;
             } catch (error) {
                 lastError = error;
-                if (error.response?.status !== 404) {
-                    // Try query parameter method as fallback
-                    try {
-                        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                        response = await axios.post(
-                            endpoint,
-                            { contents: [{ parts: [{ text: prompt }] }] },
-                            { headers: { 'Content-Type': 'application/json' }, timeout: 90000 }
-                        );
-                        console.log(`Successfully generated guidance using query parameter method with model: ${model}`);
-                        break;
-                    } catch (fallbackError) {
-                        lastError = fallbackError;
-                        if (fallbackError.response?.status !== 404) {
-                            throw fallbackError;
-                        }
-                    }
+                if (error.response?.status === 401) {
+                    throw error; // Auth failed, no point retrying
+                }
+
+                // Try query parameter method as fallback for this model before moving to next model
+                try {
+                    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    response = await axios.post(
+                        endpoint,
+                        { contents: [{ parts: [{ text: prompt }] }] },
+                        { headers: { 'Content-Type': 'application/json' }, timeout: 90000 }
+                    );
+                    console.log(`Successfully generated guidance using query parameter method with model: ${model}`);
+                    break;
+                } catch (fallbackError) {
+                    lastError = fallbackError;
+                    // Prepare to try next model in the outer loop
+                    console.warn(`Fallback method failed for ${model}, trying next model...`);
                 }
             }
         }
