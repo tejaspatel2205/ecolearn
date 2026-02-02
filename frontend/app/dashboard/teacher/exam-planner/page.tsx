@@ -7,6 +7,7 @@ import axios from 'axios';
 
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Student {
     _id: string;
@@ -24,6 +25,7 @@ interface MarkInput {
 }
 
 export default function ExamPlannerTeacher() {
+    const { user } = useAuth();
     const [students, setStudents] = useState<Student[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -45,8 +47,12 @@ export default function ExamPlannerTeacher() {
             setLoading(true);
             try {
                 const token = localStorage.getItem('token');
-                const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/exam-planner/students?query=${searchQuery}`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/exam-planner/students`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    params: {
+                        query: searchQuery,
+                        semester: examContext.semester
+                    }
                 });
                 setStudents(res.data);
             } catch (err) {
@@ -61,9 +67,24 @@ export default function ExamPlannerTeacher() {
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [searchQuery]);
+        return () => clearTimeout(timer);
+    }, [searchQuery, examContext.semester]); // Re-fetch when semester changes
 
 
+    const handleSubjectChange = (subject: string) => {
+        const semesterMatch = subject.match(/\(Sem (\d+)\)$/);
+        let semester = examContext.semester;
+
+        if (semesterMatch) {
+            semester = semesterMatch[1];
+        }
+
+        setExamContext(prev => ({
+            ...prev,
+            subject_name: subject,
+            semester: semester
+        }));
+    };
     const handleMarkChange = (studentId: string, field: 'marks' | 'remarks' | 'focus_areas', value: string) => {
         setMarksData(prev => ({
             ...prev,
@@ -249,15 +270,31 @@ export default function ExamPlannerTeacher() {
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Subject Name</label>
                                 <div className="relative group">
-                                    <BookOpen className="absolute left-3 top-3 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. Adv. Mathematics"
-                                        className="w-full pl-10 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                                    <BookOpen className="absolute left-3 top-3 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
+                                    <select
+                                        className="w-full pl-10 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                                         value={examContext.subject_name}
                                         onChange={e => setExamContext({ ...examContext, subject_name: e.target.value })}
-                                    />
+                                        required
+                                    >
+                                        <option value="" disabled>Select Subject</option>
+                                        {user?.assigned_subjects && user.assigned_subjects.length > 0 ? (
+                                            user.assigned_subjects.map(subject => (
+                                                <option key={subject} value={subject}>{subject}</option>
+                                            ))
+                                        ) : (
+                                            <option value="" disabled>No subjects assigned</option>
+                                        )}
+                                    </select>
+                                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
                                 </div>
+                                {(!user?.assigned_subjects || user.assigned_subjects.length === 0) && (
+                                    <p className="text-xs text-red-500 mt-1">Contact Admin to assign subjects.</p>
+                                )}
                             </div>
 
                             {/* Exam Type Selector */}

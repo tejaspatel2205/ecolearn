@@ -27,6 +27,10 @@ const quizSchema = new mongoose.Schema({
     type: Number,
     default: 100
   },
+  max_attempts: {
+    type: Number,
+    default: 1
+  },
   time_limit: {
     type: Number, // in minutes
     default: null

@@ -109,6 +109,30 @@ router.put('/users/:id', authMiddleware, roleMiddleware('admin'), async (req, re
   }
 });
 
+// Update teacher subjects
+router.put('/users/:id/subjects', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const { assigned_subjects } = req.body;
+
+    if (!assigned_subjects || !Array.isArray(assigned_subjects) || assigned_subjects.length === 0) {
+      return res.status(400).json({ error: 'At least one subject is required.' });
+    }
+
+    const user = await User.findOne({ _id: req.params.id, role: 'teacher' });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    user.assigned_subjects = assigned_subjects;
+    await user.save();
+
+    res.json({ message: 'Subjects updated successfully', user });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete user
 router.delete('/users/:id', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
@@ -295,6 +319,61 @@ router.put('/content/:type/:id/status', authMiddleware, roleMiddleware('admin'),
     }
 
     res.json(content);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Pending Teacher Requests
+router.get('/teacher-requests', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const teachers = await User.find({ role: 'teacher', approval_status: 'pending' })
+      .select('-password')
+      .sort({ created_at: -1 });
+    res.json(teachers);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve Teacher
+router.post('/approve-teacher', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const { userId, assigned_subjects } = req.body;
+
+    if (!assigned_subjects || assigned_subjects.length === 0) {
+      return res.status(400).json({ error: 'At least one subject must be assigned.' });
+    }
+
+    const teacher = await User.findById(userId);
+    if (!teacher || teacher.role !== 'teacher') {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    teacher.approval_status = 'approved';
+    teacher.assigned_subjects = assigned_subjects;
+    await teacher.save();
+
+    res.json({ message: 'Teacher approved successfully', teacher });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reject Teacher
+router.post('/reject-teacher', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    const teacher = await User.findById(userId);
+    if (!teacher || teacher.role !== 'teacher') {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    teacher.approval_status = 'rejected';
+    await teacher.save();
+
+    res.json({ message: 'Teacher rejected successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Target, TrendingUp, BookOpen, AlertCircle, Award, ChevronRight, BarChart, Sparkles, UserCheck, ArrowRight, X, MessageSquare, Send, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
+import { useAuth } from '@/contexts/AuthContext';
 
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
@@ -44,7 +45,8 @@ export default function ExamPlannerStudent() {
     const [marks, setMarks] = useState<MarkRecord[]>([]);
     const [predictions, setPredictions] = useState<Prediction[]>([]);
     const [guidanceData, setGuidanceData] = useState<any[]>([]); // New AI Guidance
-    const [selectedSemester, setSelectedSemester] = useState<number>(1);
+    const { user } = useAuth();
+    const [selectedSemester, setSelectedSemester] = useState<number>(user?.semester || 1);
 
     // UI Refs for scrolling
     const aiSectionRef = useRef<HTMLElement>(null);
@@ -81,6 +83,12 @@ export default function ExamPlannerStudent() {
         { role: 'assistant', content: 'Hello! I am your Academic Assistant. I can help you analyze your grades or suggest study plans. How can I help you today?' }
     ]);
     const [chatLoading, setChatLoading] = useState(false);
+
+    useEffect(() => {
+        if (user?.semester) {
+            setSelectedSemester(user.semester);
+        }
+    }, [user]);
 
     useEffect(() => {
         fetchSemesterData(selectedSemester);

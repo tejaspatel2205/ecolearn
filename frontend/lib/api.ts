@@ -405,6 +405,14 @@ export async function deleteUser(userId: string) {
   });
 }
 
+// Update user subjects
+export async function updateUserSubjects(userId: string, assigned_subjects: string[]) {
+  return apiCall(`/api/admin/users/${userId}/subjects`, {
+    method: 'PUT',
+    body: JSON.stringify({ assigned_subjects })
+  });
+}
+
 export async function getAdminAnalytics() {
   return apiCall('/api/admin/analytics');
 }

@@ -5,8 +5,9 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { User } from '@/lib/types';
-import { getAdminUsers, updateUserRole, deleteUser } from '@/lib/api';
-import { Users, Edit, Trash2, Search, Filter } from 'lucide-react';
+import { getAdminUsers, updateUserRole, deleteUser, updateUserSubjects } from '@/lib/api';
+import { Users, Edit, Trash2, Search, Filter, BookOpen, X } from 'lucide-react';
+import Button from '@/components/Button';
 
 export default function ManageUsers() {
   const { user } = useAuth();
@@ -15,6 +16,12 @@ export default function ManageUsers() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+
+  // Subject Modal State
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<User | null>(null);
+  const [subjectInput, setSubjectInput] = useState('');
+  const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
     if (user && user.role === 'admin') {
@@ -34,7 +41,6 @@ export default function ManageUsers() {
     } catch (error: any) {
       console.error('Error loading users:', error);
       if (error.message === 'Access denied' || error.status === 403) {
-        // Force refresh to clear stale state if needed
         window.location.reload();
       }
     } finally {
@@ -76,6 +82,38 @@ export default function ManageUsers() {
       setUsers(users.map(u => (u._id || u.id) === userId ? { ...u, role: newRole } : u));
     } catch (error) {
       console.error('Error updating user role:', error);
+    }
+  };
+
+  const openSubjectModal = (user: User) => {
+    setSelectedTeacher(user);
+    setSubjectInput(user.assigned_subjects?.join(', ') || '');
+    setShowSubjectModal(true);
+  };
+
+  const handleSaveSubjects = async () => {
+    if (!selectedTeacher) return;
+
+    // Validate input
+    const subjects = subjectInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (subjects.length === 0) {
+      alert('At least one subject is required.');
+      return;
+    }
+
+    setSaveLoading(true);
+    try {
+      await updateUserSubjects(selectedTeacher._id || selectedTeacher.id, subjects);
+
+      // Update local state
+      setUsers(users.map(u => (u._id || u.id) === selectedTeacher._id ? { ...u, assigned_subjects: subjects } : u));
+      setShowSubjectModal(false);
+      setSelectedTeacher(null);
+    } catch (error) {
+      console.error('Error updating subjects:', error);
+      alert('Failed to update subjects');
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -152,6 +190,11 @@ export default function ManageUsers() {
                         <div>
                           <div className="text-sm font-medium text-gray-900">{user.full_name}</div>
                           <div className="text-sm text-gray-500">{user.email}</div>
+                          {user.role === 'teacher' && user.assigned_subjects && user.assigned_subjects.length > 0 && (
+                            <div className="text-xs text-green-600 mt-1">
+                              Subjects: {user.assigned_subjects.join(', ')}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -172,12 +215,24 @@ export default function ManageUsers() {
                         {new Date(user.created_at || Date.now()).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => deleteUserHandler(user._id || user.id)}
-                          className="text-red-600 hover:text-red-900 ml-4"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center space-x-3">
+                          {user.role === 'teacher' && (
+                            <button
+                              onClick={() => openSubjectModal(user)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Manage Subjects"
+                            >
+                              <BookOpen className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => deleteUserHandler(user._id || user.id)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Delete User"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -192,6 +247,41 @@ export default function ManageUsers() {
             </div>
           )}
         </div>
+
+        {/* Manage Subjects Modal */}
+        {showSubjectModal && selectedTeacher && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Manage Subjects</h2>
+                <button onClick={() => setShowSubjectModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">Teacher: <strong>{selectedTeacher.full_name}</strong></p>
+                <label className="block text-sm font-medium mb-1">Assigned Subjects (comma separated)</label>
+                <input
+                  type="text"
+                  value={subjectInput}
+                  onChange={(e) => setSubjectInput(e.target.value)}
+                  className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Mathematics, Physics, Chemistry"
+                />
+                <p className="text-xs text-gray-500 mt-1">Existing subjects: {selectedTeacher.assigned_subjects?.join(', ') || 'None'}</p>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setShowSubjectModal(false)}>Cancel</Button>
+                <Button variant="primary" onClick={handleSaveSubjects} disabled={saveLoading}>
+                  {saveLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </ProtectedRoute>
   );

@@ -53,6 +53,24 @@ export default function Navbar() {
       }
 
       setPendingRequests(total);
+
+      // Admin: Fetch teacher approval requests
+      if (user.role === 'admin') {
+        try {
+          const teacherResponse = await fetch('http://localhost:3001/api/admin/teacher-requests', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (teacherResponse.ok) {
+            const data = await teacherResponse.json();
+            if (Array.isArray(data)) {
+              setPendingRequests(data.length);
+            }
+          }
+        } catch (e) {
+          console.warn('Could not fetch teacher requests', e);
+        }
+      }
+
     } catch (error) {
       console.error('Error fetching requests:', error);
     }
@@ -98,14 +116,16 @@ export default function Navbar() {
                   </Button>
                 </Link>
 
-                {user.role === 'teacher' && (
-                  <Link href="/dashboard/teacher/requests" className="relative group">
+                {(user.role === 'teacher' || user.role === 'admin') && (
+                  <Link href={user.role === 'admin' ? "/dashboard/admin/teacher-approvals" : "/dashboard/teacher/requests"} className="relative group">
                     <div className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors relative">
                       <Bell className="w-5 h-5" />
                       {pendingRequests > 0 && (
                         <span className="absolute top-1 right-1 flex h-3 w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 text-[10px] text-white items-center justify-center"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 text-[10px] text-white items-center justify-center">
+                            {pendingRequests > 9 ? '9+' : pendingRequests}
+                          </span>
                         </span>
                       )}
                     </div>

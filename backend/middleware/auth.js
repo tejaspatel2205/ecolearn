@@ -38,5 +38,33 @@ const roleMiddleware = (...roles) => {
   };
 };
 
-module.exports = { authMiddleware, roleMiddleware };
+const subjectAccessMiddleware = async (req, res, next) => {
+  if (req.user.role === 'admin') return next(); // Admins have full access
+
+  if (req.user.role !== 'teacher') {
+    return res.status(403).json({ error: 'Access denied. Teachers only.' });
+  }
+
+  const subject = req.body.subject_name || req.query.subject_name;
+
+  if (!subject) {
+    // If no subject is specified in the request, we might need to handle it based on context
+    // For now, if the endpoint requires subject validation, it should be present.
+    // However, some endpoints might be generic.
+    // Let's assume this middleware is used on routes where subject is critical.
+    // But to be safe, if we can't determine subject, we pass, but the controller should handle it?
+    // Better: If this middleware is used, subject MUST be present.
+    return res.status(400).json({ error: 'Subject is required for authorization' });
+  }
+
+  // Normalize subject comparison (case-insensitive)
+  const assigned = req.user.assigned_subjects.map(s => s.toLowerCase());
+  if (!assigned.includes(subject.toLowerCase())) {
+    return res.status(403).json({ error: `You are not authorized to manage ${subject}.` });
+  }
+
+  next();
+};
+
+module.exports = { authMiddleware, roleMiddleware, subjectAccessMiddleware };
 

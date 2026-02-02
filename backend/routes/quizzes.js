@@ -182,7 +182,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
       // Allow unlimited attempts for Smart Practice quizzes
       const isSmartPractice = quiz.title.startsWith('Smart Practice');
-      const allowedAttempts = isSmartPractice ? Infinity : 1 + approvedRequests;
+      const maxAttempts = quiz.max_attempts || 1; // Default to 1
+      const allowedAttempts = isSmartPractice ? Infinity : maxAttempts + approvedRequests;
       const canAttempt = isSmartPractice ? true : attemptsCount < allowedAttempts;
 
       return res.json({
@@ -190,6 +191,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         questions: canAttempt ? await QuizQuestion.find({ quiz_id: quiz._id }).select('-correct_answer') : [], // Hide questions if blocked
         canAttempt,
         attemptsCount,
+        maxAttempts,
         allowedAttempts,
         requestStatus: pendingRequest ? 'pending' : null
       });
@@ -328,6 +330,33 @@ router.post('/:id/submit', authMiddleware, roleMiddleware('student'), async (req
   try {
     const { answers } = req.body;
     const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' }); // Added strict check
+
+    // [CRITICAL] Enforce Retake Logic
+    const attemptsCount = await QuizAttempt.countDocuments({
+      quiz_id: quiz._id,
+      student_id: req.user._id,
+      status: 'completed'
+    });
+
+    const approvedRequests = await RetakeRequest.countDocuments({
+      quiz_id: quiz._id,
+      student_id: req.user._id,
+      status: 'approved'
+    });
+
+    const isSmartPractice = quiz.title.startsWith('Smart Practice');
+    // Default max_attempts to 1 if not set (for backward compatibility)
+    const maxAttempts = quiz.max_attempts || 1;
+    const allowedAttempts = isSmartPractice ? Infinity : maxAttempts + approvedRequests;
+
+    if (attemptsCount >= allowedAttempts) {
+      return res.status(403).json({
+        error: 'Retake is not enabled or attempt limit reached.',
+        details: { attempts: attemptsCount, allowed: allowedAttempts }
+      });
+    }
+
     const questions = await QuizQuestion.find({ quiz_id: req.params.id });
 
     // Create attempt

@@ -143,6 +143,15 @@ export default function AdminDashboard() {
             </Link>
 
             <Link
+              href="/dashboard/admin/assign-subjects"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow ring-1 ring-blue-100"
+            >
+              <BookOpen className="w-8 h-8 text-blue-600 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Assign Subjects</h3>
+              <p className="text-gray-600 text-sm">Manage subject allocations for teachers</p>
+            </Link>
+
+            <Link
               href="/dashboard/admin/institutions"
               className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow"
             >

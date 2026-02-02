@@ -35,13 +35,13 @@ const generateOTP = () => {
 router.post('/send-otp', async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
     const otp = generateOTP();
-    
+
     // Save OTP to database
     await OTP.findOneAndDelete({ email: email.toLowerCase() });
     const otpDoc = new OTP({
@@ -94,13 +94,13 @@ router.post('/send-otp', async (req, res) => {
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
-    
+
     if (!email || !otp) {
       return res.status(400).json({ error: 'Email and OTP are required' });
     }
 
-    const otpDoc = await OTP.findOne({ 
-      email: email.toLowerCase(), 
+    const otpDoc = await OTP.findOne({
+      email: email.toLowerCase(),
       otp,
       expires_at: { $gt: new Date() }
     });
@@ -111,7 +111,7 @@ router.post('/verify-otp', async (req, res) => {
 
     // Delete the OTP after successful verification
     await OTP.findByIdAndDelete(otpDoc._id);
-    
+
     // Generate password reset token for 1 hour
     const resetToken = crypto.randomBytes(32).toString('hex');
     await PasswordResetToken.findOneAndDelete({ email: email.toLowerCase() });
@@ -120,7 +120,7 @@ router.post('/verify-otp', async (req, res) => {
       token: resetToken
     });
     await tokenDoc.save();
-    
+
     res.json({ message: 'OTP verified successfully', resetToken });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -144,8 +144,12 @@ router.post('/register', async (req, res) => {
     }
 
     // Validate role
-    if (!['student', 'teacher', 'admin'].includes(role)) {
+    if (!['student', 'teacher'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    if (role === 'admin') {
+      return res.status(403).json({ error: 'Admin registration is not allowed' });
     }
 
     // Check if user exists
@@ -162,7 +166,10 @@ router.post('/register', async (req, res) => {
       mobile,
       role,
       institution_id: institutionId || null,
-      email_verified: true
+      institution_id: institutionId || null,
+      email_verified: true,
+      approval_status: role === 'teacher' ? 'pending' : 'approved',
+      assigned_subjects: []
     });
 
     await user.save();
@@ -207,7 +214,7 @@ router.post('/login', async (req, res) => {
 
     // Find user by email
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    
+
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -216,6 +223,15 @@ router.post('/login', async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check approval status for teachers
+    if (user.role === 'teacher' && user.approval_status !== 'approved') {
+      if (user.approval_status === 'pending') {
+        return res.status(403).json({ error: 'Your account is awaiting admin approval.' });
+      } else if (user.approval_status === 'rejected') {
+        return res.status(403).json({ error: 'Your account registration has been rejected. Please contact support.' });
+      }
     }
 
     // Generate token
@@ -228,7 +244,9 @@ router.post('/login', async (req, res) => {
         email: user.email,
         full_name: user.full_name,
         role: user.role,
-        institution_id: user.institution_id
+        institution_id: user.institution_id,
+        assigned_subjects: user.assigned_subjects,
+        semester: user.semester
       }
     });
   } catch (error) {
@@ -245,7 +263,9 @@ router.get('/me', authMiddleware, async (req, res) => {
       email: req.user.email,
       full_name: req.user.full_name,
       role: req.user.role,
-      institution_id: req.user.institution_id
+      institution_id: req.user.institution_id,
+      assigned_subjects: req.user.assigned_subjects,
+      semester: req.user.semester
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -256,7 +276,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
@@ -268,7 +288,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     const otp = generateOTP();
-    
+
     // Save OTP to database with 10 minutes expiry
     await OTP.findOneAndDelete({ email: email.toLowerCase() });
     const otpDoc = new OTP({
@@ -321,7 +341,7 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, resetToken, newPassword } = req.body;
-    
+
     if (!email || !resetToken || !newPassword) {
       return res.status(400).json({ error: 'Email, reset token, and new password are required' });
     }
@@ -333,8 +353,8 @@ router.post('/reset-password', async (req, res) => {
     }
 
     // Verify reset token
-    const tokenDoc = await PasswordResetToken.findOne({ 
-      email: email.toLowerCase(), 
+    const tokenDoc = await PasswordResetToken.findOne({
+      email: email.toLowerCase(),
       token: resetToken,
       expires_at: { $gt: new Date() }
     });
@@ -355,7 +375,7 @@ router.post('/reset-password', async (req, res) => {
 
     // Delete the reset token after successful password reset
     await PasswordResetToken.findByIdAndDelete(tokenDoc._id);
-    
+
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
     console.error('Reset password error:', error);

@@ -3,7 +3,7 @@ const router = express.Router();
 const InternalAssessment = require('../models/InternalAssessment');
 const ExamGoal = require('../models/ExamGoal');
 const User = require('../models/User');
-const { authMiddleware, roleMiddleware } = require('../middleware/auth');
+const { authMiddleware, roleMiddleware, subjectAccessMiddleware } = require('../middleware/auth');
 const { generateExamGuidance } = require('../utils/ai');
 
 // @route   GET /api/exam-planner/students
@@ -21,8 +21,13 @@ router.get('/students', authMiddleware, roleMiddleware('teacher', 'admin'), asyn
             ];
         }
 
-        // Future Enhancement: Filter by verified semester enrollment if schema permits
-        const students = await User.find(filter).select('full_name email _id mobile');
+        // Filter by semester if provided
+        const { semester } = req.query;
+        if (semester) {
+            filter.semester = Number(semester);
+        }
+
+        const students = await User.find(filter).select('full_name email _id mobile semester');
         res.json(students);
     } catch (error) {
         console.error('Error searching students:', error);
@@ -33,7 +38,7 @@ router.get('/students', authMiddleware, roleMiddleware('teacher', 'admin'), asyn
 // @route   POST /api/exam-planner/internal-marks
 // @desc    Add or update internal marks (Teacher only)
 // @access  Private (Teacher)
-router.post('/internal-marks', authMiddleware, roleMiddleware('teacher', 'admin'), async (req, res) => {
+router.post('/internal-marks', authMiddleware, roleMiddleware('teacher', 'admin'), subjectAccessMiddleware, async (req, res) => {
     try {
         const { student_id, subject_name, internal_marks_obtained, total_internal_marks, semester, exam_type, remarks, focus_areas } = req.body;
 
@@ -92,7 +97,7 @@ router.post('/internal-marks', authMiddleware, roleMiddleware('teacher', 'admin'
 // @route   DELETE /api/exam-planner/internal-marks
 // @desc    Delete internal marks (Teacher only)
 // @access  Private (Teacher)
-router.delete('/internal-marks', authMiddleware, roleMiddleware('teacher', 'admin'), async (req, res) => {
+router.delete('/internal-marks', authMiddleware, roleMiddleware('teacher', 'admin'), subjectAccessMiddleware, async (req, res) => {
     try {
         const { student_id, subject_name, semester } = req.body;
 

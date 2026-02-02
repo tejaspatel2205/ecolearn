@@ -9,8 +9,11 @@ export interface User {
   full_name: string;
   role: UserRole | string;
   institution_id?: string;
+  assigned_subjects?: string[];
   created_at?: string;
   updated_at?: string;
+  approval_status?: 'pending' | 'approved' | 'rejected';
+  semester?: number;
 }
 
 export interface Institution {

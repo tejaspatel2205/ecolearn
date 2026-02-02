@@ -9,6 +9,7 @@ export interface User {
   full_name: string;
   role: UserRole;
   institution_id?: string;
+  assigned_subjects?: string[];
 }
 
 export interface AuthUser extends User {

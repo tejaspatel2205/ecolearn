@@ -43,6 +43,19 @@ const userSchema = new mongoose.Schema({
   updated_at: {
     type: Date,
     default: Date.now
+  },
+  approval_status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved'
+  },
+  assigned_subjects: {
+    type: [String],
+    default: []
+  },
+  semester: {
+    type: Number,
+    default: 1
   }
 });
 
