@@ -8,7 +8,7 @@ export interface User {
   email: string;
   full_name: string;
   role: UserRole | string;
-  institution_id?: string;
+  institution_id?: string | Institution;
   assigned_subjects?: string[];
   created_at?: string;
   updated_at?: string;
@@ -26,6 +26,7 @@ export interface Institution {
   contact_phone?: string;
   created_at?: string;
   updated_at?: string;
+  colleges?: string[];
 }
 
 export interface Class {
@@ -37,6 +38,8 @@ export interface Class {
   teacher_id?: string;
   created_at?: string;
   updated_at?: string;
+  admin_feedback?: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface Lesson {
@@ -52,6 +55,8 @@ export interface Lesson {
   order_index: number;
   created_at?: string;
   updated_at?: string;
+  admin_feedback?: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface Quiz {
@@ -73,6 +78,8 @@ export interface Quiz {
     avgScore: number;
     maxScore?: number;
   };
+  admin_feedback?: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface QuizQuestion {
@@ -99,6 +106,7 @@ export interface Challenge {
   instructions?: string;
   category: string;
   points_reward: number;
+  eco_value?: number;
   teacher_id?: string;
   class_id?: string;
   class_number?: string | number;
@@ -106,6 +114,8 @@ export interface Challenge {
   is_global: boolean;
   created_at?: string;
   updated_at?: string;
+  admin_feedback?: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface StudentStats {

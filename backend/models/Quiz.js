@@ -42,6 +42,15 @@ const quizSchema = new mongoose.Schema({
   updated_at: {
     type: Date,
     default: Date.now
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  admin_feedback: {
+    type: String,
+    default: ''
   }
 });
 

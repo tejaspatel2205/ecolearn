@@ -21,6 +21,7 @@ function TeacherChallengesContent() {
     description: '',
     instructions: '',
     points_reward: 50,
+    eco_value: 5,
     difficulty_level: 'beginner',
     category: 'recycling'
   });
@@ -68,6 +69,7 @@ function TeacherChallengesContent() {
       description: challenge.description,
       instructions: challenge.instructions || '', // Handle potential missing field
       points_reward: challenge.points_reward,
+      eco_value: challenge.eco_value || 5,
       difficulty_level: challenge.difficulty_level || 'beginner',
       category: challenge.category
     });
@@ -84,6 +86,7 @@ function TeacherChallengesContent() {
       description: '',
       instructions: '',
       points_reward: 50,
+      eco_value: 5,
       difficulty_level: 'beginner',
       category: 'recycling'
     });
@@ -96,7 +99,8 @@ function TeacherChallengesContent() {
       const challengeData = {
         ...formData,
         teacher_id: user!.id,
-        points_reward: parseInt(formData.points_reward.toString())
+        points_reward: parseInt(formData.points_reward.toString()),
+        eco_value: parseInt(formData.eco_value.toString())
       };
 
       if (editingId) {
@@ -256,6 +260,7 @@ function TeacherChallengesContent() {
                     description: '',
                     instructions: '',
                     points_reward: 50,
+                    eco_value: 5,
                     difficulty_level: 'beginner',
                     category: 'recycling'
                   });
@@ -296,13 +301,25 @@ function TeacherChallengesContent() {
                       min="10"
                       max="500"
                       value={formData.points_reward}
-                      onChange={(e) => setFormData({ ...formData, points_reward: parseInt(e.target.value) })}
+                      onChange={(e) => setFormData({ ...formData, points_reward: parseInt(e.target.value || '0') })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Eco Value (Impact Score)</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max="100"
+                      value={formData.eco_value}
+                      onChange={(e) => setFormData({ ...formData, eco_value: parseInt(e.target.value || '0') })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty Level</label>
                     <select
@@ -379,16 +396,34 @@ function TeacherChallengesContent() {
             {challenges.map((challenge) => (
               <div key={`challenge-${challenge.id || challenge._id}`} className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{getCategoryIcon(challenge.category)}</span>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{challenge.title}</h3>
-                      <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-start gap-2 flex-1">
+                    <span className="text-2xl mt-1">{getCategoryIcon(challenge.category)}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{challenge.title}</h3>
+                        <span className={`px-2 py-0.5 text-xs rounded-full border ${challenge.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' :
+                            challenge.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                              'bg-yellow-50 text-yellow-700 border-yellow-200'
+                          }`}>
+                          {challenge.status ? challenge.status.toUpperCase() : 'PENDING'}
+                        </span>
+                      </div>
+
+                      {challenge.status === 'rejected' && challenge.admin_feedback && (
+                        <div className="my-2 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-800">
+                          <span className="font-bold">Changes Needed:</span> {challenge.admin_feedback}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className={`inline-block px-2 py-1 text-xs rounded-full ${getDifficultyColor(challenge.difficulty_level || 'beginner')}`}>
                           {challenge.difficulty_level || 'beginner'}
                         </span>
                         <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
                           +{challenge.points_reward} pts
+                        </span>
+                        <span className="inline-block bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded-full">
+                          🌱 Eco: {challenge.eco_value || 5}
                         </span>
                         {challenge.class_number && (
                           <span className="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">

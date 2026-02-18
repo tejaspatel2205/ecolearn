@@ -169,13 +169,15 @@ export default function AdminDashboard() {
               <p className="text-gray-600 text-sm">View platform-wide statistics and insights</p>
             </Link>
 
+
+
             <Link
-              href="/dashboard/admin/content"
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow"
+              href="/dashboard/admin/profile-requests"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow ring-1 ring-indigo-100"
             >
-              <BookOpen className="w-8 h-8 text-purple-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Content Moderation</h3>
-              <p className="text-gray-600 text-sm">Review and moderate lessons, quizzes, and challenges</p>
+              <Users className="w-8 h-8 text-indigo-500 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Profile Requests</h3>
+              <p className="text-gray-600 text-sm">Approve or reject user profile update requests</p>
             </Link>
 
             <Link

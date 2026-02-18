@@ -46,6 +46,8 @@ app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/exam-planner', require('./routes/examPlanner'));
 app.use('/api/badges', require('./routes/badges'));
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/profile-requests', require('./routes/profileRequests'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Root route for easy verification
 app.get('/', (req, res) => {

@@ -79,15 +79,30 @@ export default function TeacherLessons() {
             {lessons.map((lesson) => (
               <div key={`lesson-${lesson.id || lesson._id}`} className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{lesson.title}</h3>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">{lesson.title}</h3>
+                      <span className={`px-2 py-0.5 text-xs rounded-full border ${lesson.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' :
+                          lesson.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                            'bg-yellow-50 text-yellow-700 border-yellow-200'
+                        }`}>
+                        {lesson.status ? lesson.status.toUpperCase() : 'PENDING'}
+                      </span>
+                    </div>
+
+                    {lesson.status === 'rejected' && lesson.admin_feedback && (
+                      <div className="mb-3 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-800">
+                        <span className="font-bold">Changes Needed:</span> {lesson.admin_feedback}
+                      </div>
+                    )}
+
                     <p className="text-sm text-blue-600 mb-2">{lesson.topic}</p>
                     {lesson.class_number && (
                       <p className="text-sm text-purple-600 mb-2">Class: {lesson.class_number}</p>
                     )}
                     <p className="text-sm text-gray-600">{lesson.content?.substring(0, 100)}...</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 ml-4">
                     <Link
                       href={`/dashboard/student/lessons/${lesson.id || lesson._id}`}
                       className="text-green-600 hover:text-green-800"

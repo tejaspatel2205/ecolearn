@@ -54,7 +54,31 @@ export default function ContentModeration() {
     }
   };
 
-  const updateContentStatus = async (type: string, id: string, status: string) => {
+  // Modal State
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const openRejectModal = (item: any) => {
+    setSelectedItem(item);
+    setRejectReason(item.admin_feedback || '');
+    setRejectModalOpen(true);
+  };
+
+  const handleReject = async () => {
+    if (!selectedItem || !rejectReason.trim()) {
+      alert('Please provide a reason for rejection.');
+      return;
+    }
+    await updateContentStatus(activeTab, selectedItem.id || selectedItem._id, 'rejected', rejectReason);
+    setRejectModalOpen(false);
+    setSelectedItem(null);
+    setRejectReason('');
+  };
+
+  const updateContentStatus = async (type: string, id: string, status: string, feedback?: string) => {
+    setActionLoading(true);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/admin/content/${type}/${id}/status`, {
@@ -63,7 +87,7 @@ export default function ContentModeration() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, feedback })
       });
 
       if (response.ok) {
@@ -71,13 +95,15 @@ export default function ContentModeration() {
         setContent(prev => ({
           ...prev,
           [type]: prev[type as keyof typeof prev].map((item: any) =>
-            (item.id || item._id) === id ? { ...item, status } : item
+            (item.id || item._id) === id ? { ...item, status, admin_feedback: feedback } : item
           )
         }));
       }
     } catch (error) {
       console.error('Error updating content status:', error);
       alert('Failed to update status');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -232,9 +258,15 @@ export default function ContentModeration() {
                         </div>
                       )}
 
+                      {item.status === 'rejected' && item.admin_feedback && (
+                        <div className="mt-2 p-3 bg-red-50 text-red-800 text-sm rounded-lg border border-red-200">
+                          <strong>Changes Needed:</strong> {item.admin_feedback}
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                         <span>Created: {new Date(item.created_at).toLocaleDateString()}</span>
-                        <span>By: {typeof item.teacher_id === 'object' ? item.teacher_id.full_name : `Teacher ID ${item.teacher_id}`}</span>
+                        <span>By: {item.teacher_id && typeof item.teacher_id === 'object' ? item.teacher_id.full_name : `Teacher ID ${item.teacher_id || 'Unknown'}`}</span>
                       </div>
                     </div>
 
@@ -265,6 +297,7 @@ export default function ContentModeration() {
                           onClick={() => updateContentStatus(activeTab, item.id || item._id, 'approved')}
                           className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
                           title="Approve"
+                          disabled={actionLoading}
                         >
                           <Check className="w-4 h-4" />
                         </button>
@@ -272,9 +305,10 @@ export default function ContentModeration() {
 
                       {item.status !== 'rejected' && (
                         <button
-                          onClick={() => updateContentStatus(activeTab, item.id || item._id, 'rejected')}
+                          onClick={() => openRejectModal(item)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                           title="Reject"
+                          disabled={actionLoading}
                         >
                           <Ban className="w-4 h-4" />
                         </button>
@@ -300,6 +334,40 @@ export default function ContentModeration() {
             )}
           </div>
         </div>
+
+        {/* Rejection Modal */}
+        {rejectModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+              <h2 className="text-xl font-bold mb-4">Reject Content</h2>
+              <p className="text-gray-600 mb-4">
+                Please provide feedback on what changes are needed for approval.
+              </p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="w-full border p-2 rounded-lg mb-4 focus:ring-2 focus:ring-red-500 outline-none"
+                rows={4}
+                placeholder="Ex: The description needs to be more detailed..."
+              ></textarea>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setRejectModalOpen(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReject}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Rejecting...' : 'Reject Content'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );

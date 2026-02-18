@@ -14,12 +14,24 @@ export default function ManageInstitutions() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingInstitution, setEditingInstitution] = useState<Institution | null>(null);
-  const [formData, setFormData] = useState({
+  const [newCollegeName, setNewCollegeName] = useState('');
+  const [editingCollegeIndex, setEditingCollegeIndex] = useState<number | null>(null);
+  const [editingCollegeText, setEditingCollegeText] = useState('');
+
+  const [formData, setFormData] = useState<{
+    name: string;
+    type: 'school' | 'college' | 'university' | 'ngo';
+    address: string;
+    contact_email: string;
+    contact_phone: string;
+    colleges: string[];
+  }>({
     name: '',
     type: 'school',
     address: '',
     contact_email: '',
-    contact_phone: ''
+    contact_phone: '',
+    colleges: []
   });
 
   useEffect(() => {
@@ -36,7 +48,8 @@ export default function ManageInstitutions() {
       // Ensure id exists (fallback to _id)
       const normalizedData = data.map((inst: any) => ({
         ...inst,
-        id: inst.id || inst._id
+        id: inst.id || inst._id,
+        colleges: inst.colleges || []
       }));
       setInstitutions(normalizedData);
     } catch (error) {
@@ -64,15 +77,21 @@ export default function ManageInstitutions() {
 
     try {
       let data;
+      // Ensure colleges are only sent for universities
+      const submitData = {
+        ...formData,
+        colleges: formData.type === 'university' ? formData.colleges : []
+      };
+
       if (editingInstitution) {
-        data = await updateInstitution(editingInstitution.id, formData);
-        const normalized = { ...data, id: data.id || data._id };
+        data = await updateInstitution(editingInstitution.id, submitData);
+        const normalized = { ...data, id: data.id || data._id, colleges: data.colleges || [] };
         setInstitutions(institutions.map(inst =>
           inst.id === editingInstitution.id ? normalized : inst
         ));
       } else {
-        data = await createInstitution(formData);
-        const normalized = { ...data, id: data.id || data._id };
+        data = await createInstitution(submitData);
+        const normalized = { ...data, id: data.id || data._id, colleges: data.colleges || [] };
         setInstitutions([...institutions, normalized]);
       }
       resetForm();
@@ -99,7 +118,8 @@ export default function ManageInstitutions() {
       type: institution.type,
       address: institution.address || '',
       contact_email: institution.contact_email || '',
-      contact_phone: institution.contact_phone || ''
+      contact_phone: institution.contact_phone || '',
+      colleges: institution.colleges || []
     });
     setShowCreateForm(true);
   };
@@ -110,10 +130,56 @@ export default function ManageInstitutions() {
       type: 'school',
       address: '',
       contact_email: '',
-      contact_phone: ''
+      contact_phone: '',
+      colleges: []
     });
     setEditingInstitution(null);
     setShowCreateForm(false);
+    setNewCollegeName('');
+    setEditingCollegeIndex(null);
+    setEditingCollegeText('');
+  };
+
+  const addCollege = () => {
+    if (newCollegeName.trim()) {
+      setFormData({
+        ...formData,
+        colleges: [...formData.colleges, newCollegeName.trim()]
+      });
+      setNewCollegeName('');
+    }
+  };
+
+  const removeCollege = (index: number) => {
+    const updatedColleges = [...formData.colleges];
+    updatedColleges.splice(index, 1);
+    setFormData({
+      ...formData,
+      colleges: updatedColleges
+    });
+  };
+
+  const startEditingCollege = (index: number, name: string) => {
+    setEditingCollegeIndex(index);
+    setEditingCollegeText(name);
+  };
+
+  const saveEditedCollege = (index: number) => {
+    if (editingCollegeText.trim()) {
+      const updatedColleges = [...formData.colleges];
+      updatedColleges[index] = editingCollegeText.trim();
+      setFormData({
+        ...formData,
+        colleges: updatedColleges
+      });
+      setEditingCollegeIndex(null);
+      setEditingCollegeText('');
+    }
+  };
+
+  const cancelEditingCollege = () => {
+    setEditingCollegeIndex(null);
+    setEditingCollegeText('');
   };
 
   if (loading) {
@@ -166,7 +232,7 @@ export default function ManageInstitutions() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
                   <select
                     value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   >
                     <option value="school">School</option>
@@ -202,7 +268,96 @@ export default function ManageInstitutions() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                <div className="md:col-span-2 flex gap-4">
+
+                {/* College Management for University Type */}
+                {formData.type === 'university' && (
+                  <div className="md:col-span-2 border-t pt-4 mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Manage Colleges</label>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        type="text"
+                        placeholder="Enter college name"
+                        value={newCollegeName}
+                        onChange={(e) => setNewCollegeName(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCollege())}
+                      />
+                      <button
+                        type="button"
+                        onClick={addCollege}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {formData.colleges.length > 0 ? (
+                      <ul className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-2 bg-gray-50">
+                        {formData.colleges.map((college, index) => (
+                          <li key={index} className="flex justify-between items-center bg-white p-2 rounded shadow-sm">
+                            {editingCollegeIndex === index ? (
+                              <div className="flex flex-1 items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={editingCollegeText}
+                                  onChange={(e) => setEditingCollegeText(e.target.value)}
+                                  className="flex-1 px-2 py-1 text-sm border border-indigo-300 rounded focus:ring-1 focus:ring-indigo-500 outline-none"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      saveEditedCollege(index);
+                                    } else if (e.key === 'Escape') {
+                                      cancelEditingCollege();
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => saveEditedCollege(index)}
+                                  className="text-green-600 hover:text-green-800 text-xs font-semibold"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditingCollege}
+                                  className="text-gray-500 hover:text-gray-700 text-xs"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-sm text-gray-800">{college}</span>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingCollege(index, college)}
+                                    className="text-blue-500 hover:text-blue-700"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCollege(index)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No colleges added yet.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="md:col-span-2 flex gap-4 mt-4">
                   <button
                     type="submit"
                     className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
@@ -268,7 +423,23 @@ export default function ManageInstitutions() {
                   <p className="text-sm text-gray-600 mb-1">📧 {institution.contact_email}</p>
                 )}
                 {institution.contact_phone && (
-                  <p className="text-sm text-gray-600">📞 {institution.contact_phone}</p>
+                  <p className="text-sm text-gray-600 mb-2">📞 {institution.contact_phone}</p>
+                )}
+
+                {institution.type === 'university' && institution.colleges && institution.colleges.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 mb-1">Colleges ({institution.colleges.length}):</p>
+                    <div className="flex flex-wrap gap-1">
+                      {institution.colleges.slice(0, 3).map((col, idx) => (
+                        <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
+                          {col}
+                        </span>
+                      ))}
+                      {institution.colleges.length > 3 && (
+                        <span className="text-xs text-gray-500 px-1">+ {institution.colleges.length - 3} more</span>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             ))}

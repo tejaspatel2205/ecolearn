@@ -273,6 +273,10 @@ export async function getQuizAttempts(quizId: string) {
   return apiCall(`/api/quizzes/${quizId}/attempts`);
 }
 
+export async function getQuizRequests() {
+  return apiCall('/api/quizzes/teacher/requests');
+}
+
 // Challenges API
 export async function getChallenges(classId?: string) {
   const endpoint = classId ? `/api/challenges?classId=${classId}` : '/api/challenges';
@@ -321,6 +325,10 @@ export function gradeChallengeSubmission(submissionId: string, data: { status: s
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+export async function getChallengeRequests() {
+  return apiCall('/api/challenges/teacher/requests');
 }
 
 export function handleRetakeRequest(submissionId: string, status: 'approved' | 'rejected') {
@@ -413,8 +421,46 @@ export async function updateUserSubjects(userId: string, assigned_subjects: stri
   });
 }
 
-export async function getAdminAnalytics() {
-  return apiCall('/api/admin/analytics');
+export async function getAnalyticsMetadata() {
+  return apiCall('/api/admin/analytics/metadata');
+}
+
+export async function getAdminAnalytics(filters?: any) {
+  // Remove empty filters
+  const cleanFilters: any = {};
+  if (filters) {
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) cleanFilters[key] = filters[key];
+    });
+  }
+  const query = new URLSearchParams(cleanFilters).toString();
+  return apiCall(`/api/admin/analytics?${query}`);
+}
+
+export async function exportAdminAnalytics(filters?: any) {
+  const cleanFilters: any = {};
+  if (filters) {
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) cleanFilters[key] = filters[key];
+    });
+  }
+  const query = new URLSearchParams(cleanFilters).toString();
+  return apiCall(`/api/admin/analytics/export?${query}`);
+}
+
+export async function compareInstitutions(id1: string, id2: string) {
+  return apiCall(`/api/admin/analytics/compare?id1=${id1}&id2=${id2}`);
+}
+
+export async function getAtRiskStudents(filters?: any) {
+  const cleanFilters: any = {};
+  if (filters) {
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) cleanFilters[key] = filters[key];
+    });
+  }
+  const query = new URLSearchParams(cleanFilters).toString();
+  return apiCall(`/api/admin/analytics/at-risk?${query}`);
 }
 
 export async function getAdminLeaderboard(period = 'all-time') {
@@ -432,6 +478,10 @@ export async function updateContentStatus(type: string, id: string, status: stri
     method: 'PUT',
     body: JSON.stringify({ status })
   });
+}
+
+export async function getTeacherApprovalRequests() {
+  return apiCall('/api/admin/teacher-requests');
 }
 
 // Institutions API (extended)

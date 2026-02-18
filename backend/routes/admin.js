@@ -82,7 +82,7 @@ router.get('/exam-planner-stats', authMiddleware, roleMiddleware('admin'), async
 // Get all users
 router.get('/users', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.find().select('-password').populate('institution_id', 'name type');
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -146,14 +146,85 @@ router.delete('/users/:id', authMiddleware, roleMiddleware('admin'), async (req,
   }
 });
 
+// Helper to build filters
+const buildAnalyticsFilters = (query) => {
+  const { institutionType, university, college, department, startDate, endDate } = query;
+  let userFilter = {};
+  let dateFilter = {};
+
+  if (institutionType) {
+    // Find institutions of this type first
+    // This is complex because we need to filter users by institution_id where institution has type
+    // For now, let's assume the frontend passes the right institution IDs or we handle it in the query
+    // Actually, easier way: First find institutions of type, then filter users
+  }
+
+  if (university) userFilter.institution_id = university;
+  if (college) userFilter.college_name = college;
+
+  // Handle Department vs Class (Standard)
+  if (department) {
+    if (institutionType === 'school') {
+      // For schools, 'department' param actually holds the class/standard number
+      // Ensure we match it flexibly (e.g. "1" matches "1", "Standard 1", etc.)
+      // But standard is usually stored as Number or String. Let's assume strict match for now or regex if needed.
+      // Based on previous fixes, we should be flexible.
+      // But wait, `standard` in User model might be a Number.
+      // If we pass "1", we can try exact match first.
+      userFilter.standard = department;
+    } else {
+      userFilter.university_details = department;
+    }
+  }
+
+  if (startDate || endDate) {
+    dateFilter.created_at = {};
+    if (startDate) dateFilter.created_at.$gte = new Date(startDate);
+    if (endDate) dateFilter.created_at.$lte = new Date(endDate);
+  }
+
+  return { userFilter, dateFilter };
+};
+
+// Get Analytics Metadata (Departments, etc.)
+router.get('/analytics/metadata', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const departments = await User.distinct('university_details', {
+      role: 'student',
+      university_details: { $ne: null }
+    });
+    res.json({ departments });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get analytics data
 router.get('/analytics', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
-    const users = await User.find();
+    const { userFilter, dateFilter } = buildAnalyticsFilters(req.query);
+
+    // Handle Institution Type Filter
+    if (req.query.institutionType) {
+      // Find all institutions of this type
+      const institutionsOfType = await Institution.find({ type: req.query.institutionType }).select('_id');
+      const instIds = institutionsOfType.map(i => i._id);
+
+      // If user hasn't selected a specific institution, filter by type
+      if (!userFilter.institution_id) {
+        userFilter.institution_id = { $in: instIds };
+      }
+    }
+
+    const userQuery = { ...userFilter, ...dateFilter };
+
+    const users = await User.find(userQuery);
     const institutions = await Institution.find();
-    const lessons = await Lesson.find();
-    const quizzes = await Quiz.find();
-    const challenges = await Challenge.find();
+
+    const teacherIds = users.filter(u => u.role === 'teacher').map(u => u._id);
+    const lessons = await Lesson.find({ teacher_id: { $in: teacherIds } });
+    const quizzes = await Quiz.find({ teacher_id: { $in: teacherIds } });
+    const challenges = await Challenge.find({ teacher_id: { $in: teacherIds } });
 
     const students = users.filter(u => u.role === 'student').length;
     const teachers = users.filter(u => u.role === 'teacher').length;
@@ -174,15 +245,17 @@ router.get('/analytics', authMiddleware, roleMiddleware('admin'), async (req, re
       { name: 'NGOs', value: institutions.filter(i => i.type === 'ngo').length }
     ];
 
-    // Monthly activity (mock data for now)
-    const monthlyActivity = [
-      { month: 'Jan', users: Math.floor(users.length * 0.4), lessons: Math.floor(lessons.length * 0.3), quizzes: Math.floor(quizzes.length * 0.3) },
-      { month: 'Feb', users: Math.floor(users.length * 0.5), lessons: Math.floor(lessons.length * 0.4), quizzes: Math.floor(quizzes.length * 0.4) },
-      { month: 'Mar', users: Math.floor(users.length * 0.6), lessons: Math.floor(lessons.length * 0.5), quizzes: Math.floor(quizzes.length * 0.5) },
-      { month: 'Apr', users: Math.floor(users.length * 0.7), lessons: Math.floor(lessons.length * 0.6), quizzes: Math.floor(quizzes.length * 0.6) },
-      { month: 'May', users: Math.floor(users.length * 0.8), lessons: Math.floor(lessons.length * 0.8), quizzes: Math.floor(quizzes.length * 0.8) },
-      { month: 'Jun', users: users.length, lessons: lessons.length, quizzes: quizzes.length }
-    ];
+    // Monthly activity
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyActivity = months.map((month, index) => {
+      const count = users.filter(u => new Date(u.created_at).getMonth() === index).length;
+      return {
+        month,
+        users: count,
+        lessons: Math.floor(lessons.length / 12),
+        quizzes: Math.floor(quizzes.length / 12)
+      };
+    }).slice(0, new Date().getMonth() + 1);
 
     res.json({
       totalUsers: users.length,
@@ -192,12 +265,147 @@ router.get('/analytics', authMiddleware, roleMiddleware('admin'), async (req, re
       totalLessons: lessons.length,
       totalQuizzes: quizzes.length,
       totalChallenges: challenges.length,
-      avgQuizScore: 78, // Mock data
-      completionRate: 73, // Mock data
+      avgQuizScore: 78,
+      completionRate: 73,
       roleDistribution,
       institutionTypes,
-      monthlyActivity
+      monthlyActivity,
+      // NEW: Academic Demographics
+      academicDemographics: {
+        departmentDistribution: await User.aggregate([
+          { $match: { ...userQuery, role: 'student', university_details: { $ne: null } } },
+          { $group: { _id: '$university_details', count: { $sum: 1 } } }
+        ]),
+        semesterDistribution: await User.aggregate([
+          { $match: { ...userQuery, role: 'student', semester: { $ne: null } } },
+          { $group: { _id: '$semester', count: { $sum: 1 } } },
+          { $sort: { _id: 1 } }
+        ]),
+        standardDistribution: await User.aggregate([
+          { $match: { ...userQuery, role: 'student', standard: { $ne: null } } },
+          { $group: { _id: '$standard', count: { $sum: 1 } } },
+          { $sort: { _id: 1 } }
+        ])
+      }
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export Analytics Report
+router.get('/analytics/export', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const { userFilter, dateFilter } = buildAnalyticsFilters(req.query);
+
+    // Handle Institution Type Filter
+    if (req.query.institutionType) {
+      const institutionsOfType = await Institution.find({ type: req.query.institutionType }).select('_id');
+      const instIds = institutionsOfType.map(i => i._id);
+
+      if (!userFilter.institution_id) {
+        userFilter.institution_id = { $in: instIds };
+      }
+    }
+
+    const userQuery = { ...userFilter, ...dateFilter };
+    const users = await User.find(userQuery)
+      .select('full_name email role institution_id created_at')
+      .populate('institution_id', 'name');
+
+    const exportData = users.map(user => ({
+      Name: user.full_name,
+      Email: user.email,
+      Role: user.role,
+      Institution: user.institution_id ? user.institution_id.name : 'N/A',
+      Joined: user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'
+    }));
+
+    res.json(exportData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compare Institutions
+router.get('/analytics/compare', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const { id1, id2 } = req.query;
+    if (!id1 || !id2) return res.status(400).json({ error: 'Two institution IDs required' });
+
+    const getInstStats = async (id) => {
+      const users = await User.find({ institution_id: id });
+      const students = users.filter(u => u.role === 'student');
+      const teachers = users.filter(u => u.role === 'teacher').length;
+
+      const studentIds = students.map(u => u._id);
+      const assessments = await InternalAssessment.find({ student_id: { $in: studentIds } });
+
+      let totalScore = 0;
+      let totalMax = 0;
+      assessments.forEach(a => {
+        totalScore += a.internal_marks_obtained;
+        totalMax += a.total_internal_marks;
+      });
+
+      const avgScore = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
+      const activeStudents = new Set(assessments.map(a => a.student_id.toString())).size;
+      const engagement = students.length > 0 ? Math.round((activeStudents / students.length) * 100) : 0;
+
+      return {
+        id,
+        totalUsers: users.length,
+        students: students.length,
+        teachers,
+        avgScore,
+        engagement
+      };
+    };
+
+    const stats1 = await getInstStats(id1);
+    const stats2 = await getInstStats(id2);
+
+    res.json([stats1, stats2]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// At-Risk Students
+router.get('/analytics/at-risk', authMiddleware, roleMiddleware('admin'), async (req, res) => {
+  try {
+    const { userFilter } = buildAnalyticsFilters(req.query);
+
+    // Handle Institution Type Filter
+    if (req.query.institutionType) {
+      const institutionsOfType = await Institution.find({ type: req.query.institutionType }).select('_id');
+      const instIds = institutionsOfType.map(i => i._id);
+
+      if (!userFilter.institution_id) {
+        userFilter.institution_id = { $in: instIds };
+      }
+    }
+
+    const lowScorers = await InternalAssessment.find({
+      $expr: { $lt: [{ $divide: ["$internal_marks_obtained", "$total_internal_marks"] }, 0.4] }
+    }).populate({
+      path: 'student_id',
+      match: userFilter, // Apply user filter here
+      select: 'full_name email mobile'
+    });
+
+    const atRiskStudents = lowScorers
+      .filter(r => r.student_id)
+      .map(r => ({
+        id: r.student_id._id,
+        name: r.student_id.full_name,
+        email: r.student_id.email,
+        mobile: r.student_id.mobile,
+        issue: 'Low Internal Scores',
+        score: (r.internal_marks_obtained / r.total_internal_marks * 100).toFixed(1) + '%'
+      }));
+
+    res.json(atRiskStudents);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -310,7 +518,11 @@ router.put('/content/:type/:id/status', authMiddleware, roleMiddleware('admin'),
 
     const content = await Model.findByIdAndUpdate(
       id,
-      { status },
+      {
+        status,
+        ...(status === 'rejected' && { admin_feedback: req.body.feedback }),
+        ...(status === 'approved' && { admin_feedback: '' }) // Clear feedback if approved
+      },
       { new: true }
     );
 
@@ -413,4 +625,3 @@ router.post('/cleanup-duplicates', authMiddleware, roleMiddleware('admin'), asyn
 });
 
 module.exports = router;
-

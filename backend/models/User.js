@@ -56,6 +56,22 @@ const userSchema = new mongoose.Schema({
   semester: {
     type: Number,
     default: 1
+  },
+  standard: {
+    type: Number, // For school students (1-12)
+    default: null
+  },
+  university_details: {
+    type: String, // Department/Course for University
+    default: null
+  },
+  college_name: {
+    type: String, // Constituent college under a university
+    default: null
+  },
+  ngo_details: {
+    type: String, // Role/Function for NGO
+    default: null
   }
 });
 

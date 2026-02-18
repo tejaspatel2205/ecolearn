@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Button from './Button';
-import { LogOut, LayoutDashboard, Leaf, Bell, FileText, Sparkles } from 'lucide-react';
+import { LogOut, LayoutDashboard, Leaf, Bell, FileText, Sparkles, User } from 'lucide-react';
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
@@ -14,7 +14,7 @@ export default function Navbar() {
   const [pendingRequests, setPendingRequests] = useState(0);
 
   useEffect(() => {
-    if (user && user.role === 'teacher') {
+    if (user && (user.role === 'teacher' || user.role === 'admin')) {
       fetchRequests();
       // Optional: Poll every minute or so
       const interval = setInterval(fetchRequests, 60000);
@@ -24,29 +24,24 @@ export default function Navbar() {
 
   const fetchRequests = async () => {
     try {
-      const token = localStorage.getItem('token');
-      // Fetch quiz requests
-      const quizResponse = await fetch('http://localhost:3001/api/quizzes/teacher/requests', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const { getQuizRequests, getChallengeRequests, getTeacherApprovalRequests } = await import('@/lib/api');
       let total = 0;
-      if (quizResponse.ok) {
-        const data = await quizResponse.json();
-        if (Array.isArray(data)) {
-          total += data.length;
+
+      // Fetch quiz requests
+      try {
+        const quizRequests = await getQuizRequests();
+        if (Array.isArray(quizRequests)) {
+          total += quizRequests.length;
         }
+      } catch (e) {
+        console.warn('Could not fetch quiz requests', e);
       }
 
       // Fetch challenge requests
       try {
-        const challengeResponse = await fetch('http://localhost:3001/api/challenges/teacher/requests', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (challengeResponse.ok) {
-          const data = await challengeResponse.json();
-          if (Array.isArray(data)) {
-            total += data.length;
-          }
+        const challengeRequests = await getChallengeRequests();
+        if (Array.isArray(challengeRequests)) {
+          total += challengeRequests.length;
         }
       } catch (e) {
         console.warn('Could not fetch challenge requests', e);
@@ -55,16 +50,11 @@ export default function Navbar() {
       setPendingRequests(total);
 
       // Admin: Fetch teacher approval requests
-      if (user.role === 'admin') {
+      if (user && user.role === 'admin') {
         try {
-          const teacherResponse = await fetch('http://localhost:3001/api/admin/teacher-requests', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (teacherResponse.ok) {
-            const data = await teacherResponse.json();
-            if (Array.isArray(data)) {
-              setPendingRequests(data.length);
-            }
+          const teacherRequests = await getTeacherApprovalRequests();
+          if (Array.isArray(teacherRequests)) {
+            setPendingRequests(teacherRequests.length);
           }
         } catch (e) {
           console.warn('Could not fetch teacher requests', e);
@@ -141,7 +131,7 @@ export default function Navbar() {
                   </Link>
                 )}
 
-                <div className="hidden md:flex flex-col items-end mr-2 px-3 py-1 bg-gray-50/50 rounded-lg border border-gray-100">
+                <div className="hidden md:flex flex-col items-end mr-2 px-3 py-1 bg-gray-50/50 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => router.push('/dashboard/profile')}>
                   <span className="text-sm font-bold text-gray-800">{user.full_name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-green-600 font-bold flex items-center justify-end">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
@@ -149,15 +139,22 @@ export default function Navbar() {
                   </span>
                 </div>
 
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleSignOut}
-                  className="shadow-red-500/20"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Link href="/dashboard/profile">
+                    <Button variant="ghost" size="sm" className="hidden md:flex text-slate-600 hover:bg-slate-50">
+                      <User className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="shadow-red-500/20"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center space-x-3">

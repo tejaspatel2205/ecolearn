@@ -34,7 +34,7 @@ export default function ExamPlannerTeacher() {
         subject_name: '',
         exam_type: 'Internal',
         total_marks: '30',
-        semester: '1'
+        semester: ''
     });
 
     const [marksData, setMarksData] = useState<MarkInput>({});
@@ -77,6 +77,9 @@ export default function ExamPlannerTeacher() {
 
         if (semesterMatch) {
             semester = semesterMatch[1];
+        } else {
+            // If subject has no semester tag, reset to All (or keep previous if preferred, but All is safer for visibility)
+            semester = '';
         }
 
         setExamContext(prev => ({
@@ -331,7 +334,8 @@ export default function ExamPlannerTeacher() {
                                         value={examContext.semester}
                                         onChange={e => setExamContext({ ...examContext, semester: e.target.value })}
                                     >
-                                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>{s}</option>)}
+                                        <option value="">All Semesters</option>
+                                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>Semester {s}</option>)}
                                     </select>
                                 </div>
                             </div>

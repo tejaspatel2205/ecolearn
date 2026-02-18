@@ -6,6 +6,7 @@ const authMiddleware = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1]; // Bearer token
 
     if (!token) {
+      console.log('[AuthMiddleware] No token provided in header:', req.headers.authorization);
       return res.status(401).json({ error: 'No token provided' });
     }
 
@@ -13,12 +14,14 @@ const authMiddleware = async (req, res, next) => {
     const user = await User.findById(decoded.userId).select('-password');
 
     if (!user) {
+      console.log('[AuthMiddleware] User not found for ID:', decoded.userId);
       return res.status(401).json({ error: 'User not found' });
     }
 
     req.user = user;
     next();
   } catch (error) {
+    console.log('[AuthMiddleware] Token verification failed:', error.message);
     res.status(401).json({ error: 'Invalid token' });
   }
 };

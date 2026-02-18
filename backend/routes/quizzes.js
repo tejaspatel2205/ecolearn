@@ -27,7 +27,43 @@ router.get('/', authMiddleware, async (req, res) => {
     if (req.user.role === 'teacher') {
       query.teacher_id = req.user._id;
     }
-    // Students and admins see all quizzes
+
+    // Students only see quizzes from their institution (matching class) OR their own quizzes (Smart Practice)
+    if (req.user.role === 'student') {
+      const User = require('../models/User');
+
+      // 1. Find Institution Teachers
+      let institutionTeacherIds = [];
+      if (req.user.institution_id) {
+        const teachers = await User.find({
+          role: 'teacher',
+          institution_id: req.user.institution_id
+        }).select('_id');
+        institutionTeacherIds = teachers.map(t => t._id);
+      }
+
+      // 2. Construct Class/Semester Regex Matcher
+      // Matches "1", "Sem 1", "Semester 1", "Standard 1", "Grade 1" (case insensitive)
+      const userClass = req.user.standard || req.user.semester;
+      let classQuery = {};
+      if (userClass) {
+        const s = String(userClass);
+        classQuery = {
+          class_number: { $regex: new RegExp(`^(Sem|Semester|Standard|Grade)?\\s*${s}$`, 'i') }
+        };
+      }
+
+      // 3. Combine Logic: Institution Content (Filtered by Class) OR Own Content
+      query.$or = [
+        {
+          teacher_id: { $in: institutionTeacherIds },
+          ...classQuery
+        },
+        {
+          teacher_id: req.user._id // Always see own quizzes (e.g. Smart Practice)
+        }
+      ];
+    }
 
     const quizzes = await Quiz.find(query)
       .populate('teacher_id', 'full_name')
@@ -251,7 +287,11 @@ router.put('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async (re
     // Update quiz
     const updatedQuiz = await Quiz.findByIdAndUpdate(
       req.params.id,
-      quizData,
+      {
+        ...quizData,
+        status: 'pending', // Reset status to pending on update
+        admin_feedback: '' // Clear feedback
+      },
       { new: true }
     );
 

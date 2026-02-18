@@ -19,7 +19,29 @@ router.get('/', authMiddleware, async (req, res) => {
     if (req.user.role === 'teacher') {
       query.teacher_id = req.user._id;
     }
-    // Students and admins see all lessons
+
+    // Students only see lessons from their institution and their class/semester
+    if (req.user.role === 'student') {
+      // 1. Filter by Institution (via Teachers)
+      if (req.user.institution_id) {
+        const User = require('../models/User');
+        const teachers = await User.find({
+          role: 'teacher',
+          institution_id: req.user.institution_id
+        }).select('_id');
+
+        const teacherIds = teachers.map(t => t._id);
+        query.teacher_id = { $in: teacherIds };
+      }
+
+      // 2. Filter by Class/Semester (Flexible Match)
+      const userClass = req.user.standard || req.user.semester;
+      if (userClass) {
+        const s = String(userClass);
+        // Matches "1", "Sem 1", "Semester 1", "Standard 1", "Grade 1" (case insensitive)
+        query.class_number = { $regex: new RegExp(`^(Sem|Semester|Standard|Grade)?\\s*${s}$`, 'i') };
+      }
+    }
 
     const lessons = await Lesson.find(query)
       .populate('teacher_id', 'full_name')
@@ -89,7 +111,11 @@ router.put('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async (re
 
     const updatedLesson = await Lesson.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        ...req.body,
+        status: 'pending', // Reset status to pending on update
+        admin_feedback: '' // Clear feedback
+      },
       { new: true }
     );
 

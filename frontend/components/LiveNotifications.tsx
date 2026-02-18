@@ -5,6 +5,7 @@ import { useSocket } from '@/components/SocketProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bell, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import axios from 'axios';
 
 interface Notification {
     id: string;
@@ -18,8 +19,56 @@ export default function LiveNotifications() {
     const { user } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
 
+    // ...
+
     useEffect(() => {
-        if (!socket || !user) return;
+        if (!user) return;
+
+        // Fetch stored notifications on load
+        const fetchNotifications = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.get(
+                    `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/notifications`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                // Add unread stored notifications to the list
+                const unread = res.data.filter((n: any) => !n.is_read).map((n: any) => ({
+                    id: n._id,
+                    title: n.title,
+                    message: n.message,
+                    type: n.type
+                }));
+
+                // Add to state one by one with delay for effect, or just batch
+                if (unread.length > 0) {
+                    // We add them with a slight stagger so they don't all pop at once identically
+                    unread.forEach((n: any, index: number) => {
+                        setTimeout(() => {
+                            setNotifications(prev => {
+                                // Prevent duplicates
+                                if (prev.some(existing => existing.id === n.id)) return prev;
+                                return [...prev, n];
+                            });
+                            // Mark as read immediately or let user dismiss? 
+                            // For now, let's mark as read so they don't appear next refresh
+                            axios.put(
+                                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/notifications/${n.id}/read`,
+                                {},
+                                { headers: { Authorization: `Bearer ${token}` } }
+                            );
+                        }, index * 300);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to fetch notifications:', error);
+            }
+        };
+
+        fetchNotifications();
+
+        if (!socket) return;
 
         // Listener for Retake Requests (Teachers)
         if (user.role === 'teacher') {
@@ -62,7 +111,7 @@ export default function LiveNotifications() {
     };
 
     return (
-        <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        <div className="fixed top-20 right-4 z-[100] flex flex-col gap-2">
             <AnimatePresence>
                 {notifications.map(n => (
                     <motion.div
@@ -70,18 +119,30 @@ export default function LiveNotifications() {
                         initial={{ opacity: 0, x: 50 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 50 }}
-                        className="bg-white dark:bg-zinc-800 rounded-lg shadow-lg border-l-4 border-blue-500 p-4 w-80 pointer-events-auto flex items-start gap-3"
+                        className={`
+                            rounded-lg shadow-xl border-l-4 p-4 w-96 pointer-events-auto flex items-start gap-3 backdrop-blur-sm
+                            ${n.type === 'success' ? 'bg-green-50/90 border-green-500' :
+                                n.type === 'error' ? 'bg-red-50/90 border-red-500' :
+                                    n.type === 'warning' ? 'bg-yellow-50/90 border-yellow-500' :
+                                        'bg-white/90 border-blue-500'}
+                        `}
                     >
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400">
+                        <div className={`
+                            p-2 rounded-full 
+                            ${n.type === 'success' ? 'bg-green-100 text-green-600' :
+                                n.type === 'error' ? 'bg-red-100 text-red-600' :
+                                    n.type === 'warning' ? 'bg-yellow-100 text-yellow-600' :
+                                        'bg-blue-100 text-blue-600'}
+                        `}>
                             <Bell size={18} />
                         </div>
                         <div className="flex-1">
-                            <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100">{n.title}</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{n.message}</p>
+                            <h4 className="font-bold text-sm text-gray-900">{n.title}</h4>
+                            <p className="text-sm text-gray-700 mt-1 leading-relaxed">{n.message}</p>
                         </div>
                         <button
                             onClick={() => removeNotification(n.id)}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
                         >
                             <X size={16} />
                         </button>

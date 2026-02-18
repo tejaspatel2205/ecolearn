@@ -7,7 +7,7 @@ const institutionSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['school', 'college', 'ngo'],
+    enum: ['school', 'college', 'university', 'ngo'],
     required: true
   },
   address: {
@@ -21,6 +21,10 @@ const institutionSchema = new mongoose.Schema({
   updated_at: {
     type: Date,
     default: Date.now
+  },
+  colleges: {
+    type: [String], // List of colleges under this university
+    default: []
   }
 });
 

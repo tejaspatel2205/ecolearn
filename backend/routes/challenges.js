@@ -21,7 +21,28 @@ router.get('/', authMiddleware, async (req, res) => {
     if (req.user.role === 'teacher') {
       query.teacher_id = req.user._id;
     }
-    // Students and admins see all challenges
+
+    // Students only see global challenges OR challenges from their institution
+    if (req.user.role === 'student') {
+      const User = require('../models/User');
+
+      // Find teachers in the same institution
+      // If institution_id is missing, they only see global challenges
+      let teacherIds = [];
+      if (req.user.institution_id) {
+        const teachers = await User.find({
+          role: 'teacher',
+          institution_id: req.user.institution_id
+        }).select('_id');
+        teacherIds = teachers.map(t => t._id);
+      }
+
+      // Allow global challenges OR institution challenges
+      query.$or = [
+        { is_global: true },
+        { teacher_id: { $in: teacherIds } }
+      ];
+    }
 
     const challenges = await Challenge.find(query)
       .populate('teacher_id', 'full_name')
@@ -124,7 +145,11 @@ router.put('/:id', authMiddleware, roleMiddleware('teacher', 'admin'), async (re
 
     const updatedChallenge = await Challenge.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        ...req.body,
+        status: 'pending', // Reset status to pending on update
+        admin_feedback: '' // Clear feedback
+      },
       { new: true }
     );
 
@@ -292,6 +317,14 @@ router.post('/submission/:id/grade', authMiddleware, roleMiddleware('teacher'), 
         }
 
         stats.current_level = Math.max(1, Math.floor(Math.sqrt(stats.total_points / 100)) + 1);
+
+        // Update Eco Impact Score
+        // Get the challenge correctly to find its eco_value
+        const challenge = await Challenge.findById(submission.challenge_id);
+        if (challenge) {
+          stats.eco_impact_score = (stats.eco_impact_score || 0) + (challenge.eco_value || 5);
+        }
+
         await stats.save();
 
       } else if (currentHighest === 0 && newPoints > 0) {

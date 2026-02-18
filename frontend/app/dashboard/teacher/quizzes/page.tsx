@@ -79,8 +79,23 @@ export default function TeacherQuizzes() {
             {quizzes.map((quiz) => (
               <div key={`quiz-${quiz.id || quiz._id}`} className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{quiz.title}</h3>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">{quiz.title}</h3>
+                      <span className={`px-2 py-0.5 text-xs rounded-full border ${quiz.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' :
+                          quiz.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                            'bg-yellow-50 text-yellow-700 border-yellow-200'
+                        }`}>
+                        {quiz.status ? quiz.status.toUpperCase() : 'PENDING'}
+                      </span>
+                    </div>
+
+                    {quiz.status === 'rejected' && quiz.admin_feedback && (
+                      <div className="mb-3 p-2 bg-red-50 border border-red-100 rounded text-xs text-red-800">
+                        <span className="font-bold">Changes Needed:</span> {quiz.admin_feedback}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-4 mb-2">
                       <span className="text-sm text-blue-600">
                         Total Marks: {quiz.total_marks}
@@ -94,7 +109,7 @@ export default function TeacherQuizzes() {
                     )}
                     <p className="text-sm text-gray-600">{quiz.description}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 ml-4">
                     <Link
                       href={`/dashboard/student/quizzes/${quiz.id || quiz._id}`}
                       className="text-green-600 hover:text-green-800"

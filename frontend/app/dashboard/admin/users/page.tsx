@@ -198,18 +198,15 @@ export default function ManageUsers() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          value={user.role}
-                          onChange={(e) => updateUserRoleHandler(user._id || user.id, e.target.value)}
-                          className="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-green-500"
-                        >
-                          <option value="student">Student</option>
-                          <option value="teacher">Teacher</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize 
+                          ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                            user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
+                              'bg-green-100 text-green-800'}`}>
+                          {user.role}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {user.institution_id || 'N/A'}
+                        {typeof user.institution_id === 'object' && user.institution_id ? user.institution_id.name : (user.institution_id || 'N/A')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(user.created_at || Date.now()).toLocaleDateString()}

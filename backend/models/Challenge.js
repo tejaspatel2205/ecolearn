@@ -26,6 +26,10 @@ const challengeSchema = new mongoose.Schema({
     type: Number,
     default: 10
   },
+  eco_value: {
+    type: Number,
+    default: 5
+  },
   teacher_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -46,6 +50,15 @@ const challengeSchema = new mongoose.Schema({
   updated_at: {
     type: Date,
     default: Date.now
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  admin_feedback: {
+    type: String,
+    default: ''
   }
 });
 

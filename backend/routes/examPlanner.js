@@ -14,6 +14,19 @@ router.get('/students', authMiddleware, roleMiddleware('teacher', 'admin'), asyn
         const { query } = req.query;
         let filter = { role: 'student' };
 
+        // Restrict teachers to their own students
+        if (req.user.role === 'teacher') {
+            if (req.user.institution_id) {
+                filter.institution_id = req.user.institution_id;
+            }
+            if (req.user.college_name) {
+                filter.college_name = req.user.college_name;
+            }
+            if (req.user.university_details) {
+                filter.university_details = req.user.university_details;
+            }
+        }
+
         if (query) {
             filter.$or = [
                 { full_name: { $regex: query, $options: 'i' } },

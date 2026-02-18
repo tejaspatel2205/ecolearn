@@ -255,17 +255,90 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Update user profile
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const {
+      full_name,
+      mobile,
+      institution_id,
+      semester,
+      standard,
+      university_details,
+      college_name,
+      ngo_details
+    } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if profile is locked (institution_id is set)
+    // If locked, users cannot update profile directly - they must submit a request
+    if (user.institution_id && user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Profile is locked. Please submit a request to update your details.',
+        isLocked: true
+      });
+    }
+
+    // Update fields if provided
+    if (full_name) user.full_name = full_name;
+    if (mobile) user.mobile = mobile;
+
+    // Handle institution updates
+    if (institution_id) user.institution_id = institution_id;
+
+    // Handle specific fields based on institution type (frontend should send relevant ones)
+    if (semester !== undefined) user.semester = semester;
+    if (standard !== undefined) user.standard = standard;
+    if (university_details !== undefined) user.university_details = university_details;
+    if (college_name !== undefined) user.college_name = college_name;
+    if (ngo_details !== undefined) user.ngo_details = ngo_details;
+
+    await user.save();
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        institution_id: user.institution_id,
+        semester: user.semester,
+        standard: user.standard,
+        university_details: user.university_details,
+        college_name: user.college_name,
+        ngo_details: user.ngo_details
+      }
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 // Get current user
 router.get('/me', authMiddleware, async (req, res) => {
   try {
+    const user = await User.findById(req.user._id).populate('institution_id');
     res.json({
-      id: req.user._id,
-      email: req.user.email,
-      full_name: req.user.full_name,
-      role: req.user.role,
-      institution_id: req.user.institution_id,
-      assigned_subjects: req.user.assigned_subjects,
-      semester: req.user.semester
+      id: user._id,
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role,
+      mobile: user.mobile,
+      institution_id: user.institution_id,
+      assigned_subjects: user.assigned_subjects,
+      semester: user.semester,
+      standard: user.standard,
+      university_details: user.university_details,
+      college_name: user.college_name,
+      ngo_details: user.ngo_details,
+      created_at: user.created_at
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
