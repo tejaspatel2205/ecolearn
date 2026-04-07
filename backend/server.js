@@ -4,6 +4,14 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const { findAvailablePort } = require('./utils/portDetector');
 
+// Fix DNS resolution for MongoDB Atlas (querySrv ECONNREFUSED)
+const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4']);
+} catch (error) {
+  console.warn('Could not set DNS servers:', error.message);
+}
+
 dotenv.config();
 
 const app = express();

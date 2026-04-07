@@ -63,13 +63,13 @@ export default function Home() {
             transition={{ duration: 0.8 }}
           >
             <motion.div
-              className="inline-flex items-center px-4 py-2 rounded-full glass-panel mb-8 border-green-100 shadow-sm bg-white/60 backdrop-blur-md"
+              className="inline-flex items-center px-6 py-3 md:px-8 md:py-4 rounded-full glass-panel mb-8 border-green-100 shadow-sm bg-white/70 backdrop-blur-md"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2 }}
             >
-              <img src="/LOGO.jpeg" alt="EcoLearn Logo" className="w-6 h-6 object-contain rounded border border-green-200/50 mr-2 shadow-sm" />
-              <span className="text-green-700 font-medium text-sm tracking-wide uppercase">Empowering the Future Generation</span>
+              <img src="/LOGO.jpeg" alt="EcoLearn Logo" className="w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 object-contain rounded-lg border border-green-200/50 mr-4 shadow-sm" />
+              <span className="text-green-800 font-bold text-base md:text-lg lg:text-xl tracking-wide uppercase">Empowering the Future Generation</span>
             </motion.div>
 
             <h1 className="text-6xl md:text-8xl font-black text-slate-900 mb-6 tracking-tight leading-none">
