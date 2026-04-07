@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Button from './Button';
-import { LogOut, LayoutDashboard, Leaf, Bell, FileText, Sparkles, User } from 'lucide-react';
+import { LogOut, LayoutDashboard, Bell, FileText, Sparkles, User } from 'lucide-react';
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
@@ -81,10 +81,10 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <Link href="/" className="flex items-center space-x-2 group">
-            <div className="bg-green-100 p-2 rounded-xl group-hover:bg-green-200 transition-colors">
-              <Leaf className="w-6 h-6 text-green-600" />
+            <div className="bg-green-100/10 p-1 rounded-xl group-hover:bg-green-200/20 transition-colors">
+              <img src="/LOGO.jpeg" alt="EcoLearn Logo" className="w-8 h-8 object-contain rounded-lg" />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-800 bg-clip-text text-transparent">
+            <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-800 bg-clip-text text-transparent hidden sm:block">
               EcoLearn
             </span>
           </Link>

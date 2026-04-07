@@ -147,7 +147,10 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 px-4 py-8">
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">🌱 EcoLearn</h1>
+          <div className="flex items-center justify-center space-x-3 mb-2">
+            <img src="/LOGO.jpeg" alt="EcoLearn Logo" className="w-10 h-10 object-contain rounded-lg shadow-sm" />
+            <h1 className="text-3xl font-bold text-gray-900">EcoLearn</h1>
+          </div>
           <p className="text-gray-600">Create your account to get started</p>
         </div>
 

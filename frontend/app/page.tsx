@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import { GraduationCap, BookOpen, Trophy, ArrowRight, Leaf, CheckCircle } from 'lucide-react';
+import { GraduationCap, BookOpen, Trophy, ArrowRight, CheckCircle } from 'lucide-react';
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -63,12 +63,12 @@ export default function Home() {
             transition={{ duration: 0.8 }}
           >
             <motion.div
-              className="inline-flex items-center px-4 py-2 rounded-full glass-panel mb-8 border-green-100"
+              className="inline-flex items-center px-4 py-2 rounded-full glass-panel mb-8 border-green-100 shadow-sm bg-white/60 backdrop-blur-md"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2 }}
             >
-              <Leaf className="w-5 h-5 text-green-500 mr-2" />
+              <img src="/LOGO.jpeg" alt="EcoLearn Logo" className="w-6 h-6 object-contain rounded border border-green-200/50 mr-2 shadow-sm" />
               <span className="text-green-700 font-medium text-sm tracking-wide uppercase">Empowering the Future Generation</span>
             </motion.div>
 
