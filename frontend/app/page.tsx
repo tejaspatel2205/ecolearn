@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import { GraduationCap, BookOpen, Trophy, ArrowRight, CheckCircle } from 'lucide-react';
+import { GraduationCap, BookOpen, Trophy, ArrowRight, CheckCircle, Sparkles } from 'lucide-react';
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -63,13 +63,22 @@ export default function Home() {
             transition={{ duration: 0.8 }}
           >
             <motion.div
-              className="inline-flex items-center px-6 py-3 md:px-8 md:py-4 rounded-full glass-panel mb-8 border-green-100 shadow-sm bg-white/70 backdrop-blur-md"
+              className="inline-flex items-center pl-2 pr-6 py-2 rounded-full mb-8 bg-white/80 border border-green-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-md cursor-default hover:shadow-[0_8px_30px_rgb(34,197,94,0.15)] transition-shadow duration-300"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2 }}
+              whileHover={{ scale: 1.06 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <img src="/LOGO.jpeg" alt="EcoLearn Logo" className="w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 object-contain rounded-lg border border-green-200/50 mr-4 shadow-sm" />
-              <span className="text-green-800 font-bold text-base md:text-lg lg:text-xl tracking-wide uppercase">Empowering the Future Generation</span>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm border border-gray-100 mr-3 overflow-hidden p-0.5">
+                <img 
+                  src="/LOGO.jpeg" 
+                  alt="EcoLearn Logo" 
+                  className="w-full h-full object-cover rounded-full" 
+                />
+              </div>
+              <span className="bg-gradient-to-r from-green-800 to-emerald-700 bg-clip-text text-transparent font-bold text-xs sm:text-sm tracking-[0.2em] uppercase">
+                Empowering the Future Generation
+              </span>
             </motion.div>
 
             <h1 className="text-6xl md:text-8xl font-black text-slate-900 mb-6 tracking-tight leading-none">
