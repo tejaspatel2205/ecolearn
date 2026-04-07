@@ -34,9 +34,9 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen pt-16 overflow-hidden">
+    <div className="min-h-screen pt-14 overflow-hidden">
       {/* Hero Section */}
-      <section className="relative pt-20 pb-32">
+      <section className="relative pt-0 pb-32">
         {/* Animated Background Blobs */}
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10">
           <motion.div
@@ -63,22 +63,19 @@ export default function Home() {
             transition={{ duration: 0.8 }}
           >
             <motion.div
-              className="inline-flex items-center pl-2 pr-6 py-2 rounded-full mb-8 bg-white/80 border border-green-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-md cursor-default hover:shadow-[0_8px_30px_rgb(34,197,94,0.15)] transition-shadow duration-300"
+              className="inline-flex items-center justify-center p-3 rounded-full mb-8 bg-white/80 border border-green-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-md cursor-default hover:shadow-[0_8px_30px_rgb(34,197,94,0.2)] transition-shadow duration-300"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              whileHover={{ scale: 1.06 }}
+              whileHover={{ scale: 1.05 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm border border-gray-100 mr-3 overflow-hidden p-0.5">
+              <div className="w-32 h-32 sm:w-40 sm:h-40 bg-white rounded-full flex items-center justify-center overflow-hidden p-1">
                 <img 
                   src="/LOGO.jpeg" 
                   alt="EcoLearn Logo" 
-                  className="w-full h-full object-cover rounded-full" 
+                  className="w-full h-full object-cover rounded-full shadow-sm" 
                 />
               </div>
-              <span className="bg-gradient-to-r from-green-800 to-emerald-700 bg-clip-text text-transparent font-bold text-xs sm:text-sm tracking-[0.2em] uppercase">
-                Empowering the Future Generation
-              </span>
             </motion.div>
 
             <h1 className="text-6xl md:text-8xl font-black text-slate-900 mb-6 tracking-tight leading-none">
